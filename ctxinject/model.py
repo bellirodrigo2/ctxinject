@@ -1,4 +1,4 @@
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -32,12 +32,19 @@ class ArgsInjectable(Injectable):
     pass
 
 
-class ArgNameBasedInjectable(ArgsInjectable):
+class ArgNameInjec(ArgsInjectable):
     pass
 
 
-class TypeBasedInjectable(ArgsInjectable):
-    pass
+class ModelFieldInject(ArgsInjectable):
+    def __init__(self, model: type[Any], field: Optional[str] = None, **meta: Any):
+        if model is None or not isinstance(model, type):  # type: ignore
+            raise ValueError(
+                f'ModelFieldInject "model" field should be a type, but {type(model)} found'
+            )
+        self.model = model
+        self.field = field
+        super().__init__(..., **meta)
 
 
 class CallableInjectable(Injectable, ICallableInjectable):
@@ -47,15 +54,3 @@ class CallableInjectable(Injectable, ICallableInjectable):
 
 class Depends(CallableInjectable):
     pass
-
-
-if __name__ == "__main__":
-
-    dep = Depends(lambda: "foobar")
-    args = ArgNameBasedInjectable(...)
-
-    assert isinstance(dep, CallableInjectable)
-    assert not isinstance(dep, ArgNameBasedInjectable)
-
-    assert isinstance(args, ArgNameBasedInjectable)
-    assert not isinstance(args, CallableInjectable)

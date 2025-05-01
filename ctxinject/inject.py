@@ -1,88 +1,26 @@
 from functools import partial
-from typing import Any, Callable, Iterable, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Iterable, Mapping, Sequence, Union
 
 from ctxinject.mapfunction import FuncArg, get_func_args
-from ctxinject.model import (ArgNameBasedInjectable, ArgsInjectable,
-                             Injectable, TypeBasedInjectable)
+from ctxinject.model import ArgsInjectable, ModelFieldInject
 
 
-def resolve_val(
-    key: str,
-    arg: FuncArg,
-    context: Mapping[Union[str, type], Any],
-    raise_on_missing: bool,
-    tgttype: type = Injectable,
-    # modeltype:type
-) -> Optional[Any]:
-
-    # Falta para modeltype...type BaseModel
-    # duas funçoes resolve val
-
-    value = None
-    instance: Injectable = arg.getinstance(tgttype)  # Para injectable
-    if key in context:
-        value = context[key]
-    elif type(instance) in context:  # Para injectable
-        value = context[type(instance)]
-    elif instance.default is not Ellipsis:  # Para injectable
-        value = instance.default
-    elif raise_on_missing:
-        raise RuntimeError(f"Missing injectable for '{key}'")
-    if value is not None:
-        instance.validate(value)
-    return value
-
-
-def inner_inject(
-    args: dict[str, FuncArg],
-    context: Mapping[Union[str, type], Any],
-    raise_on_missing: bool,
-    tgttype: type = Injectable,
-):
-    resolved: dict[str, Any] = {}
-
-    # usar essa inner_inject
-    # tem que injetar modelos...comp basemodel
-
-    # aqui, baseado no funcarg...tem que decidir se resolve por model ou injectable
-
-    for key, arg in args.items():
-        value = resolve_val(key, arg, context, raise_on_missing, tgttype)
-        if value is not None:
-            resolved[key] = value
-    return resolved
-
-
-def inject(
-    func: Callable[..., Any],
-    context: Mapping[Union[str, type], Any],
-    raise_on_missing: bool,
-    tgttype: type = Injectable,
-):
-
-    args: dict[str, FuncArg] = {
-        arg.name: arg for arg in get_func_args(func) if arg.hasinstance(tgttype)
-    }
-    resolved: dict[str, Any] = inner_inject(args, context, raise_on_missing, tgttype)
-    return partial(func, **resolved)
-
-
-def get_required_args(arglist: Sequence[FuncArg], modeltype: type) -> Iterable[FuncArg]:
-
-    if not isinstance(modeltype, type):  # type: ignore
-        raise TypeError(
-            f'ModelType must be a type. Arg passed "{modeltype}" is not a type'
-        )
+def get_required_args(
+    arglist: Sequence[FuncArg], modeltype: Iterable[type[Any]]
+) -> Iterable[FuncArg]:
 
     ctxrequired: set[FuncArg] = set()
-
     for arg in arglist:
-        if arg.hasinstance(ArgNameBasedInjectable):
+        if arg.hasinstance(ArgsInjectable):
             ctxrequired.add(arg)
-        elif arg.hasinstance(TypeBasedInjectable):
-            ctxrequired.add(arg)
-        elif arg.istype(modeltype):
-            ctxrequired.add(arg)
+        else:
+            for model in modeltype:
+                if not isinstance(model, type):  # type: ignore
+                    raise TypeError(
+                        f'ModelType must be a type. Arg passed "{model}" is not a type'
+                    )
+                if arg.istype(model):
+                    ctxrequired.add(arg)
 
     return ctxrequired
 
@@ -91,24 +29,43 @@ def resolve_ctx(
     args: Iterable[FuncArg], context: Mapping[Union[str, type], Any]
 ) -> Mapping[str, Any]:
     ctx: dict[str, Any] = {}
+
     for arg in args:
-        if arg.name in context:
+        instance = arg.getinstance(ArgsInjectable)
+
+        if arg.name in context:  # by name
             ctx[arg.name] = context[arg.name]
-        elif arg.basetype and arg.basetype in context:
+
+        elif instance is not None and isinstance(
+            instance, ModelFieldInject
+        ):  # by model field
+            tgtmodel = instance.model
+            tgt_field = instance.field or arg.name
+            if tgtmodel in context:
+                ctx[arg.name] = getattr(context[tgtmodel], tgt_field)
+
+        elif arg.basetype is not None and arg.basetype in context:  # by type
             ctx[arg.name] = context[arg.basetype]
-        else:  # resolve by default
-            instance = arg.getinstance(ArgsInjectable)
-            if instance and instance.default is not Ellipsis:
-                ctx[arg.name] = instance.default
+
+        elif instance is not None and instance.default is not Ellipsis:  # by default
+            ctx[arg.name] = instance.default
     return ctx
 
 
-def inject2(
-    func: Callable[..., Any], context: Mapping[Union[str, type], Any], modeltype: type
-):
+def validate_context(context: Mapping[Union[str, type], Any]) -> None: ...
+
+
+def inject(
+    func: Callable[..., Any],
+    context: Mapping[Union[str, type], Any],
+    modeltype: Iterable[type[Any]],
+    validate_ctx: bool = False,
+) -> partial[Any]:
+
+    if validate_ctx:
+        validate_context(context)
 
     funcargs = get_func_args(func)
-
     required_args = get_required_args(funcargs, modeltype)
 
     ctx = resolve_ctx(required_args, context)

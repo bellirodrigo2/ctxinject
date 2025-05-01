@@ -26,22 +26,8 @@ def func_ann(
     pass
 
 
-def func_mix(arg1, arg2: Annotated[str, "meta1"], arg3: str, arg4="foobar") -> None:
+def func_mix(arg1, arg2: Annotated[str, "meta1"], arg3: str, arg4="foobar") -> None:  # type: ignore
     pass
-
-
-@pytest.fixture
-def funcsmap() -> Mapping[str, Callable[..., Any]]:
-
-    funcs_map: dict[str, Callable[..., Any]] = {
-        "mt": func_mt,
-        "simple": func_simple,
-        "def": func_def,
-        "ann": func_ann,
-        "mix": func_mix,
-    }
-
-    return funcs_map
 
 
 def func_annotated_none(
@@ -66,11 +52,11 @@ def func_kwonly(*, arg1: int, arg2: str = "default") -> None:
     pass
 
 
-class MyClass:
+def func_forward(arg: "MyClass") -> None:
     pass
 
 
-def func_forward(arg: "MyClass") -> None:
+class MyClass:
     pass
 
 
@@ -79,8 +65,14 @@ def func_none_default(arg: Optional[str] = None) -> None:
 
 
 @pytest.fixture
-def funcsmap_extended() -> Mapping[str, Callable[..., Any]]:
-    return {
+def funcsmap() -> Mapping[str, Callable[..., Any]]:
+
+    funcs_map: dict[str, Callable[..., Any]] = {
+        "mt": func_mt,
+        "simple": func_simple,
+        "def": func_def,
+        "ann": func_ann,
+        "mix": func_mix,
         "annotated_none": func_annotated_none,
         "union": func_union,
         "varargs": func_varargs,
@@ -89,13 +81,15 @@ def funcsmap_extended() -> Mapping[str, Callable[..., Any]]:
         "none_default": func_none_default,
     }
 
+    return funcs_map
+
 
 # ----------- INJECT
 
 
 def inj_func(
-    arg: str, arg_ann: Annotated[str, Injectable(...)], arg_dep: str = Injectable(...)  # type: ignore
-):
+    arg: str, arg_ann: Annotated[str, Injectable(...)], arg_dep: str = Injectable(...)
+):  # type: ignore
     pass
 
 
