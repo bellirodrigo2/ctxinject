@@ -4,8 +4,14 @@ from typing import Annotated, Any, Union
 import pytest
 
 from ctxinject.inject import inject
-from ctxinject.mapfunction import NO_DEFAULT, get_func_args
-from ctxinject.model import ArgsInjectable, Injectable, ModelFieldInject
+from ctxinject.mapfunction import get_func_args
+from ctxinject.model import (
+    ArgsInjectable,
+    Injectable,
+    InvalidInjectableDefinition,
+    ModelFieldInject,
+    UnresolvedInjectableError,
+)
 
 
 # mocks simples
@@ -88,7 +94,6 @@ def test_inject_default_used() -> None:
 
 
 def test_inject_changed_func() -> None:
-
     deps = get_func_args(injfunc)
     ctx = {"a": "foobar", "b": "helloworld"}
     resolfunc = inject(
@@ -99,7 +104,6 @@ def test_inject_changed_func() -> None:
 
 
 def test_inject_chained() -> None:
-
     deps = get_func_args(injfunc)
     ctx = {"a": "foobar"}
     resolfunc = inject(injfunc, ctx, [MyModel], True)
@@ -140,5 +144,12 @@ def test_missing_required_arg() -> None:
     def func(a: Annotated[str, ArgsInjectable(...)]) -> str:
         return a
 
-    with pytest.raises(ValueError):
-        incompleted_resolved_func = inject(func, {}, [])
+    with pytest.raises(UnresolvedInjectableError):
+        inject(func, {}, [])
+
+
+def test_invalid_modelfield() -> None:
+    with pytest.raises(InvalidInjectableDefinition):
+
+        def func(a: Annotated[str, ModelFieldInject(model=123)]) -> str:
+            return a

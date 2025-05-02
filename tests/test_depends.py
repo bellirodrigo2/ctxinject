@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 from ctxinject.dependencies import DependencyRegistry  # ou onde estiver seu arquivo

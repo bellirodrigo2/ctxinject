@@ -2,13 +2,17 @@ from functools import partial
 from typing import Any, Callable, Iterable, Mapping, Sequence, Union
 
 from ctxinject.mapfunction import FuncArg, get_func_args
-from ctxinject.model import ArgsInjectable, ICallableInjectable, ModelFieldInject
+from ctxinject.model import (
+    ArgsInjectable,
+    ICallableInjectable,
+    ModelFieldInject,
+    UnresolvedInjectableError,
+)
 
 
 def get_required_args(
     arglist: Sequence[FuncArg], modeltype: Iterable[type[Any]]
 ) -> Iterable[FuncArg]:
-
     ctxrequired: set[FuncArg] = set()
     for arg in arglist:
         if arg.hasinstance(ArgsInjectable):
@@ -51,7 +55,7 @@ def resolve_ctx(
             ctx[arg.name] = instance.default
 
         elif not allow_incomplete:
-            raise ValueError(
+            raise UnresolvedInjectableError(
                 f"Argument '{arg.name}' is incomplete or missing a valid injectable context."
             )
 
@@ -68,7 +72,6 @@ def inject(
     allow_incomplete: bool = False,
     validate_ctx: bool = False,
 ) -> partial[Any]:
-
     if validate_ctx:
         validate_context(context)
 

@@ -66,7 +66,6 @@ def func_none_default(arg: Optional[str] = None) -> None:
 
 @pytest.fixture
 def funcsmap() -> Mapping[str, Callable[..., Any]]:
-
     funcs_map: dict[str, Callable[..., Any]] = {
         "mt": func_mt,
         "simple": func_simple,

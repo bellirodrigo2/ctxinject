@@ -1,7 +1,5 @@
 from typing import Annotated, Any, Callable, Mapping, Optional, Sequence, Union
 
-import pytest
-
 from ctxinject.mapfunction import NO_DEFAULT, FuncArg, get_func_args
 from tests.conftest import MyClass
 
@@ -12,13 +10,11 @@ def test_istype_invalid_basetype() -> None:
 
 
 def test_funcarg_mt(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
-
     mt = get_func_args(funcsmap["mt"])
     assert mt == []
 
 
 def test_funcarg_simple(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
-
     simple = get_func_args(funcsmap["simple"])
     assert len(simple) == 2
     assert simple[0].name == "arg1"
@@ -39,7 +35,6 @@ def test_funcarg_simple(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
 
 
 def test_funcarg_def(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
-
     def_: Sequence[FuncArg] = get_func_args(funcsmap["def"])
     assert len(def_) == 4
     assert def_[0].name == "arg1"
@@ -75,7 +70,6 @@ def test_funcarg_def(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
 
 
 def test_funcarg_ann(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
-
     ann: Sequence[FuncArg] = get_func_args(funcsmap["ann"])
     assert len(ann) == 4
 
@@ -131,7 +125,6 @@ def test_funcarg_ann(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
 
 
 def test_funcarg_mix(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
-
     mix: Sequence[FuncArg] = get_func_args(funcsmap["mix"])
     assert len(mix) == 4
 
@@ -264,7 +257,6 @@ class NotDefinedType: ...
 
 
 def test_forward_ref_resolved() -> None:
-
     def f(x: "NotDefinedType") -> None: ...
 
     args = get_func_args(f)

@@ -25,7 +25,6 @@ class DependencyRegistry:
         context: Mapping[Union[str, type], Any],
         modeltype: Iterable[type[Any]],
     ) -> Any:
-
         depfunc = self.container.get(func, func)
         injdepfunc = inject(depfunc, context, modeltype, allow_incomplete=True)
         argsfunc = get_func_args(injdepfunc)

@@ -39,12 +39,11 @@ class FuncArg:
 
     def istype(self, tgttype: type) -> bool:
         try:
-            return self.basetype == tgttype or (issubclass(self.basetype, tgttype))
+            return self.basetype == tgttype or (issubclass(self.basetype, tgttype))  # type: ignore
         except TypeError:
             return False
 
     def getinstance(self, tgttype: type[T]) -> Optional[T]:
-
         if self.extras is not None:
             founds = [e for e in self.extras if isinstance(e, tgttype)]
             if len(founds) > 0:
@@ -58,7 +57,7 @@ class FuncArg:
 
 
 def func_arg_factory(name: str, param: inspect.Parameter, annotation: type) -> FuncArg:
-    has_default = param.default is not inspect._empty
+    has_default = param.default is not inspect._empty  # type: ignore
     default = param.default if has_default else NO_DEFAULT
     argtype = (
         annotation
