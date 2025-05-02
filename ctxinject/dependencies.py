@@ -4,7 +4,7 @@ from typing import Any, Callable, Iterable, Mapping, MutableMapping, Union
 
 from ctxinject.inject import inject
 from ctxinject.mapfunction import get_func_args
-from ctxinject.model import Depends, ICallableInjectable
+from ctxinject.model import Depends, ICallableInjectable, UnresolvedInjectableError
 
 
 async def _resolve_func(partial_fn: Callable[..., Any]) -> Any:
@@ -25,6 +25,7 @@ class DependencyRegistry:
         context: Mapping[Union[str, type], Any],
         modeltype: Iterable[type[Any]],
     ) -> Any:
+
         depfunc = self.container.get(func, func)
         injdepfunc = inject(depfunc, context, modeltype, allow_incomplete=True)
         argsfunc = get_func_args(injdepfunc)
@@ -34,10 +35,14 @@ class DependencyRegistry:
             if arg.hasinstance(self.tgttype)
         ]
         if not deps:
+            if argsfunc:
+                raise UnresolvedInjectableError(
+                    f"Arguments unresolved in '{injdepfunc.func.__name__}': {argsfunc}"
+                )
             return await _resolve_func(injdepfunc)
         dep_ctx: dict[Union[str, type], Any] = {}
         for name, dep in deps:
             dep_ctx[name] = await self.resolve(dep, context, modeltype)
-        resolved = inject(injdepfunc, dep_ctx, modeltype, allow_incomplete=True)
+        resolved = inject(injdepfunc, dep_ctx, modeltype, allow_incomplete=False)
 
         return await _resolve_func(resolved)

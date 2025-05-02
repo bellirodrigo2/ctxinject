@@ -13,16 +13,16 @@ from ctxinject.model import (
 def get_required_args(
     arglist: Sequence[FuncArg], modeltype: Iterable[type[Any]]
 ) -> Iterable[FuncArg]:
-    ctxrequired: set[FuncArg] = set()
+    ctxrequired: list[FuncArg] = []
     for arg in arglist:
         if arg.hasinstance(ArgsInjectable):
-            ctxrequired.add(arg)
+            ctxrequired.append(arg)
         else:
             for model in modeltype:
                 if arg.istype(model):
-                    ctxrequired.add(arg)
+                    ctxrequired.append(arg)
             if arg.hasinstance(ICallableInjectable):
-                ctxrequired.add(arg)
+                ctxrequired.append(arg)
 
     return ctxrequired
 
@@ -34,15 +34,17 @@ def resolve_ctx(
 ) -> Mapping[str, Any]:
     ctx: dict[str, Any] = {}
 
+    argsname = [a.name for a in args]
+
     for arg in args:
         instance = arg.getinstance(ArgsInjectable)
-
         if arg.name in context:  # by name
             ctx[arg.name] = context[arg.name]
 
         elif instance is not None and isinstance(
             instance, ModelFieldInject
         ):  # by model field
+
             tgtmodel = instance.model
             tgt_field = instance.field or arg.name
             if tgtmodel in context:
@@ -53,7 +55,6 @@ def resolve_ctx(
 
         elif instance is not None and instance.default is not Ellipsis:  # by default
             ctx[arg.name] = instance.default
-
         elif not allow_incomplete:
             raise UnresolvedInjectableError(
                 f"Argument '{arg.name}' is incomplete or missing a valid injectable context."
@@ -74,7 +75,6 @@ def inject(
 ) -> partial[Any]:
     if validate_ctx:
         validate_context(context)
-
     funcargs = get_func_args(func)
     required_args = get_required_args(funcargs, modeltype)
     ctx = resolve_ctx(required_args, context, allow_incomplete)
