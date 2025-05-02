@@ -27,7 +27,7 @@ class DependencyRegistry:
     ) -> Any:
 
         depfunc = self.container.get(func, func)
-        injdepfunc = inject(depfunc, context, modeltype)
+        injdepfunc = inject(depfunc, context, modeltype, allow_incomplete=True)
         argsfunc = get_func_args(injdepfunc)
         deps = [
             (arg.name, arg.getinstance(self.tgttype).default)  # type: ignore
@@ -39,6 +39,6 @@ class DependencyRegistry:
         dep_ctx: dict[Union[str, type], Any] = {}
         for name, dep in deps:
             dep_ctx[name] = await self.resolve(dep, context, modeltype)
-        resolved = inject(injdepfunc, dep_ctx, modeltype)
+        resolved = inject(injdepfunc, dep_ctx, modeltype, allow_incomplete=True)
 
         return await _resolve_func(resolved)

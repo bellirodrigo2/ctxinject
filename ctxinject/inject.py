@@ -2,7 +2,7 @@ from functools import partial
 from typing import Any, Callable, Iterable, Mapping, Sequence, Union
 
 from ctxinject.mapfunction import FuncArg, get_func_args
-from ctxinject.model import ArgsInjectable, ModelFieldInject
+from ctxinject.model import ArgsInjectable, ICallableInjectable, ModelFieldInject
 
 
 def get_required_args(
@@ -17,12 +17,16 @@ def get_required_args(
             for model in modeltype:
                 if arg.istype(model):
                     ctxrequired.add(arg)
+            if arg.hasinstance(ICallableInjectable):
+                ctxrequired.add(arg)
 
     return ctxrequired
 
 
 def resolve_ctx(
-    args: Iterable[FuncArg], context: Mapping[Union[str, type], Any]
+    args: Iterable[FuncArg],
+    context: Mapping[Union[str, type], Any],
+    allow_incomplete: bool,
 ) -> Mapping[str, Any]:
     ctx: dict[str, Any] = {}
 
@@ -45,6 +49,12 @@ def resolve_ctx(
 
         elif instance is not None and instance.default is not Ellipsis:  # by default
             ctx[arg.name] = instance.default
+
+        elif not allow_incomplete:
+            raise ValueError(
+                f"Argument '{arg.name}' is incomplete or missing a valid injectable context."
+            )
+
     return ctx
 
 
@@ -55,6 +65,7 @@ def inject(
     func: Callable[..., Any],
     context: Mapping[Union[str, type], Any],
     modeltype: Iterable[type[Any]],
+    allow_incomplete: bool = False,
     validate_ctx: bool = False,
 ) -> partial[Any]:
 
@@ -63,6 +74,6 @@ def inject(
 
     funcargs = get_func_args(func)
     required_args = get_required_args(funcargs, modeltype)
-    ctx = resolve_ctx(required_args, context)
+    ctx = resolve_ctx(required_args, context, allow_incomplete)
 
     return partial(func, **ctx)

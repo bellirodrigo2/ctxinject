@@ -91,7 +91,9 @@ def test_inject_changed_func() -> None:
 
     deps = get_func_args(injfunc)
     ctx = {"a": "foobar", "b": "helloworld"}
-    resolfunc = inject(injfunc, ctx, [MyModel])
+    resolfunc = inject(
+        func=injfunc, context=ctx, modeltype=[MyModel], allow_incomplete=True
+    )
     args = get_func_args(resolfunc)
     assert args != deps
 
@@ -100,12 +102,12 @@ def test_inject_chained() -> None:
 
     deps = get_func_args(injfunc)
     ctx = {"a": "foobar"}
-    resolfunc = inject(injfunc, ctx, [MyModel])
+    resolfunc = inject(injfunc, ctx, [MyModel], True)
     args = get_func_args(resolfunc)
     assert args != deps
 
     ctx2 = {"c": 2}
-    resolfunc2 = inject(resolfunc, ctx2, [MyModel])
+    resolfunc2 = inject(resolfunc, ctx2, [MyModel], True)
     args2 = get_func_args(resolfunc2)
     assert args != args2
 
@@ -138,6 +140,5 @@ def test_missing_required_arg() -> None:
     def func(a: Annotated[str, ArgsInjectable(...)]) -> str:
         return a
 
-    incompleted_resolved_func = inject(func, {}, [])
-    with pytest.raises(TypeError):
-        incompleted_resolved_func()
+    with pytest.raises(ValueError):
+        incompleted_resolved_func = inject(func, {}, [])
