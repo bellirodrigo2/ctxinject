@@ -6,6 +6,11 @@ from ctxinject.mapfunction import NO_DEFAULT, FuncArg, get_func_args
 from tests.conftest import MyClass
 
 
+def test_istype_invalid_basetype() -> None:
+    arg = FuncArg("x", argtype=None, basetype="notatype", default=None)
+    assert arg.istype(int) is False
+
+
 def test_funcarg_mt(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
 
     mt = get_func_args(funcsmap["mt"])
@@ -203,9 +208,7 @@ def test_union(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
 
 def test_varargs(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
     args = get_func_args(funcsmap["varargs"])
-    assert len(args) == 2
-    assert args[0].name == "args"
-    assert args[1].name == "kwargs"
+    assert len(args) == 0
 
 
 def test_kwonly(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
@@ -230,3 +233,39 @@ def test_none_default(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
     assert args[0].default is None
     assert args[0].basetype == Optional[str]
     assert args[0].argtype == Optional[str]
+
+
+def test_arg_without_type_or_default() -> None:
+    def func(x):
+        return x
+
+    args = get_func_args(func)
+    assert args[0].argtype is None
+    assert args[0].default is NO_DEFAULT
+
+
+def test_default_ellipsis() -> None:
+    def func(x: str = ...) -> str:  # noqa
+        return x
+
+    args = get_func_args(func)
+    assert args[0].default is Ellipsis
+
+
+def test_star_args_handling() -> None:
+    def func(a: str, *args, **kwargs):
+        return a
+
+    args = get_func_args(func)
+    assert len(args) == 1  # *args/**kwargs devem ser ignorados
+
+
+class NotDefinedType: ...
+
+
+def test_forward_ref_resolved() -> None:
+
+    def f(x: "NotDefinedType") -> None: ...
+
+    args = get_func_args(f)
+    assert args[0].basetype is NotDefinedType

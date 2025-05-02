@@ -1,11 +1,11 @@
 import inspect
+import sys
 from dataclasses import dataclass
 from functools import partial
 from typing import (
     Annotated,
     Any,
     Callable,
-    Mapping,
     Optional,
     Sequence,
     TypeVar,
@@ -34,23 +34,23 @@ class FuncArg:
     argtype: Optional[type]
     basetype: Optional[type]
     default: Optional[Any]
+    has_default: bool = False
     extras: Optional[tuple[Any]] = None
 
     def istype(self, tgttype: type) -> bool:
-        return self.basetype == tgttype or (
-            self.basetype is not None and issubclass(self.basetype, tgttype)
-        )
-
-    def _has_default(self) -> bool:
-        return self.default is not NO_DEFAULT
+        try:
+            return self.basetype == tgttype or (issubclass(self.basetype, tgttype))
+        except TypeError:
+            return False
 
     def getinstance(self, tgttype: type[T]) -> Optional[T]:
-        if self._has_default() and isinstance(self.default, tgttype):
-            return self.default
+
         if self.extras is not None:
             founds = [e for e in self.extras if isinstance(e, tgttype)]
             if len(founds) > 0:
                 return founds[0]
+        if self.has_default and isinstance(self.default, tgttype):
+            return self.default
         return None
 
     def hasinstance(self, tgttype: type) -> bool:
@@ -58,7 +58,8 @@ class FuncArg:
 
 
 def func_arg_factory(name: str, param: inspect.Parameter, annotation: type) -> FuncArg:
-    default = param.default if param.default is not inspect._empty else NO_DEFAULT  # type: ignore
+    has_default = param.default is not inspect._empty
+    default = param.default if has_default else NO_DEFAULT
     argtype = (
         annotation
         if annotation is not inspect._empty  # type: ignore
@@ -70,7 +71,12 @@ def func_arg_factory(name: str, param: inspect.Parameter, annotation: type) -> F
         basetype, *extras_ = get_args(annotation)
         extras = tuple(extras_)
     arg = FuncArg(
-        name=name, argtype=argtype, basetype=basetype, default=default, extras=extras
+        name=name,
+        argtype=argtype,
+        basetype=basetype,
+        default=default,
+        extras=extras,
+        has_default=has_default,
     )
 
     return arg
@@ -78,17 +84,30 @@ def func_arg_factory(name: str, param: inspect.Parameter, annotation: type) -> F
 
 def get_func_args(func: Callable[..., Any]) -> Sequence[FuncArg]:
     partial_args = {}
+
     if isinstance(func, partial):
         partial_args = func.keywords or {}
         func = func.func
 
     sig = inspect.signature(func)
-    hints = get_type_hints(func, include_extras=True)
+    # include_extras=True to preserve Annotated;
+    # globalns to resolve forward refs like "User"
+    hints = get_type_hints(
+        func, globalns=vars(sys.modules[func.__module__]), include_extras=True
+    )
+
     funcargs: list[FuncArg] = []
 
     for name, param in sig.parameters.items():
         if name in partial_args:
-            continue  # já foi resolvido via partial, ignora
+            continue  # already resolved by partial, ignore
+
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue  # ignore *args e **kwargs
+
         annotation: type = hints.get(name, param.annotation)
         arg = func_arg_factory(name, param, annotation)
         funcargs.append(arg)

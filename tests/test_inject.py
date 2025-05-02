@@ -4,7 +4,7 @@ from typing import Annotated, Any, Union
 import pytest
 
 from ctxinject.inject import inject
-from ctxinject.mapfunction import get_func_args
+from ctxinject.mapfunction import NO_DEFAULT, get_func_args
 from ctxinject.model import ArgsInjectable, Injectable, ModelFieldInject
 
 
@@ -87,12 +87,6 @@ def test_inject_default_used() -> None:
     )
 
 
-def test_model_validation() -> None:
-    ctx = {}
-    with pytest.raises(TypeError):
-        inject(injfunc, ctx, [MyModel, 123], True)
-
-
 def test_inject_changed_func() -> None:
 
     deps = get_func_args(injfunc)
@@ -106,15 +100,44 @@ def test_inject_chained() -> None:
 
     deps = get_func_args(injfunc)
     ctx = {"a": "foobar"}
-    resolfunc = inject(injfunc, ctx, [])
+    resolfunc = inject(injfunc, ctx, [MyModel])
     args = get_func_args(resolfunc)
     assert args != deps
 
-    # print([a.name for a in deps])
-    # print([a.name for a in args])
-
     ctx2 = {"c": 2}
-    resolfunc2 = inject(resolfunc, ctx2, [])
+    resolfunc2 = inject(resolfunc, ctx2, [MyModel])
     args2 = get_func_args(resolfunc2)
-    # assert args != args2
-    # print([a.name for a in args2])
+    assert args != args2
+
+
+def test_inject_name_over_type() -> None:
+    ctx = {
+        "b": "by_name",
+        str: "by_type",  # deveria ignorar, pois 'b' está por nome
+        "a": "ok",
+        "c": 1,
+        "e": "x",
+        "h": 0.0,
+    }
+    injected = inject(injfunc, ctx, [MyModel])
+    res = injected()
+    assert res[1] == "by_name"  # name should have preference
+
+
+def test_annotated_multiple_extras() -> None:
+    def func(a: Annotated[int, No42(44), NoValidation()]) -> int:
+        return a
+
+    args = get_func_args(func)
+    arg = args[0]
+    assert isinstance(arg.getinstance(ArgsInjectable), No42)
+    assert isinstance(arg.getinstance(NoValidation), NoValidation)
+
+
+def test_missing_required_arg() -> None:
+    def func(a: Annotated[str, ArgsInjectable(...)]) -> str:
+        return a
+
+    incompleted_resolved_func = inject(func, {}, [])
+    with pytest.raises(TypeError):
+        incompleted_resolved_func()

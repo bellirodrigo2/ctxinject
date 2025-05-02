@@ -15,10 +15,6 @@ def get_required_args(
             ctxrequired.add(arg)
         else:
             for model in modeltype:
-                if not isinstance(model, type):  # type: ignore
-                    raise TypeError(
-                        f'ModelType must be a type. Arg passed "{model}" is not a type'
-                    )
                 if arg.istype(model):
                     ctxrequired.add(arg)
 
@@ -67,7 +63,6 @@ def inject(
 
     funcargs = get_func_args(func)
     required_args = get_required_args(funcargs, modeltype)
-
     ctx = resolve_ctx(required_args, context)
 
     return partial(func, **ctx)

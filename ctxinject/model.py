@@ -48,8 +48,8 @@ class ModelFieldInject(ArgsInjectable):
 
 
 class CallableInjectable(Injectable, ICallableInjectable):
-    def __init__(self, default: Callable[..., Any], **meta: Any):
-        super().__init__(default, **meta)
+    def __init__(self, default: Callable[..., Any]):
+        super().__init__(default)
 
 
 class Depends(CallableInjectable):
