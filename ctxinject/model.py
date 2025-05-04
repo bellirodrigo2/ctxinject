@@ -55,7 +55,7 @@ class CallableInjectable(Injectable, ICallableInjectable):
         super().__init__(default)
 
 
-class Depends(CallableInjectable):
+class DependsInject(CallableInjectable):
     pass
 
 

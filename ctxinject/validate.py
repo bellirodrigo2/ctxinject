@@ -4,6 +4,7 @@ from ctxinject.constrained import constrained_factory
 from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
     ArgsInjectable,
+    DependsInject,
     Injectable,
     InvalidModelFieldType,
     ModelFieldInject,
@@ -50,8 +51,28 @@ def check_modefield_types(
 
 
 def check_depends_types(
-    args: Sequence[FuncArg],
-) -> None: ...
+    args: Sequence[FuncArg], tgttype: type[DependsInject] = DependsInject
+) -> None:
+
+    deps: list[tuple[str, Optional[type[Any]], Any]] = [
+        (arg.name, arg.basetype, arg.getinstance(tgttype).default)  # type: ignore
+        for arg in args
+        if arg.hasinstance(tgttype)
+    ]
+    for arg_name, dep_type, dep_func in deps:
+        return_type = get_type_hints(dep_func).get("return")
+        if return_type is None or not isinstance(return_type, type):
+            raise TypeError(
+                f"Depends Return Type should a be type, but {return_type} was found."
+            )
+        if dep_type is None or not isinstance(dep_type, type):  # type: ignore
+            raise TypeError(
+                f"Arg '{arg_name}' type from Depends should a be type, but {return_type} was found."
+            )
+        if not issubclass(return_type, dep_type):
+            raise TypeError(
+                f"Depends function {dep_func} return type should be a subclass of {dep_type}, but {return_type} was found"
+            )
 
 
 def func_signature_validation(
@@ -70,7 +91,7 @@ def func_signature_validation(
     check_depends_types(args)
 
 
-class ConstrainedArgInj(ArgsInjectable):
+class ConstrArgInject(ArgsInjectable):
     def __init__(
         self,
         default: Any = ...,
@@ -87,3 +108,28 @@ class ConstrainedArgInj(ArgsInjectable):
         constr = constrained_factory(basetype)
         value = constr(instance)
         return value
+
+
+class Depends(DependsInject):
+    pass
+    # def validate(self, instance: Any, basetype: type[Any]) -> Any:
+
+    #     if not callable(instance):
+    #         raise TypeError(f"Depends value should be a callable. Found '{instance}'.")
+    #     return_type = get_type_hints(instance).get("return")
+
+    #     if not isinstance(basetype, type):  # type: ignore
+    #         raise TypeError(
+    #             f"Depends Base Type should a be type, but {type(basetype)} was found."
+    #         )
+
+    #     if not return_type or not isinstance(return_type, type):
+    #         raise TypeError(
+    #             f"Depends Return Type should a be type, but {type(basetype)} was found."
+    #         )
+
+    #     if not issubclass(basetype, return_type):
+    #         raise TypeError(
+    #             f'Depends Function "{instance.__name__}" returns a "{return_type}", but function signature expects a {basetype}'
+    #         )
+    #     return instance

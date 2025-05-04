@@ -5,7 +5,7 @@ from typing import Any, Callable, Iterable, Mapping, Union
 from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
     ArgsInjectable,
-    Depends,
+    CallableInjectable,
     ICallableInjectable,
     ModelFieldInject,
     UnresolvedInjectableError,
@@ -69,7 +69,7 @@ async def inject_dependencies(
     context: Mapping[Union[str, type], Any],
     # modeltype: Iterable[type[Any]],
     overrides: Mapping[Callable[..., Any], Callable[..., Any]],
-    tgttype: type[ICallableInjectable] = Depends,
+    tgttype: type[ICallableInjectable] = CallableInjectable,
 ) -> Callable[..., Any]:
     depfunc = overrides.get(func, func)
     argsfunc = get_func_args(depfunc)
@@ -92,7 +92,7 @@ async def resolve(
     context: Mapping[Union[str, type], Any],
     # modeltype: Iterable[type[Any]],
     overrides: Mapping[Callable[..., Any], Callable[..., Any]],
-    tgttype: type[ICallableInjectable] = Depends,
+    tgttype: type[ICallableInjectable] = CallableInjectable,
 ) -> Any:
     depfunc = overrides.get(func, func)
     injdepfunc = inject_args(depfunc, context, allow_incomplete=True)

@@ -1,11 +1,12 @@
 import re
-from datetime import datetime
+from datetime import date, datetime, time
 from enum import Enum
 from functools import partial
 from typing import (
     Annotated,
     Any,
     Callable,
+    Literal,
     Mapping,
     Optional,
     Union,
@@ -108,10 +109,22 @@ def ConstrainedDict(
 
 def ConstrainedDatetime(
     value: str,
+    which: type[Any] = datetime,
+    fmt: Optional[str] = None,
     **_: Any,
-) -> datetime:
+) -> Union[datetime, date, time]:
     try:
-        return parse(value)
+        if fmt is not None:
+            dt: datetime = datetime.strptime(value, fmt)
+        else:
+            dt = parse(value)
+
+        if which == date:
+            return dt.date()
+        if which == time:
+            return dt.time()
+        return dt
+
     except Exception:
         raise ValidationError(
             f'Arg value should be a valid datetime string. Found "{value}"'
@@ -142,12 +155,17 @@ def constrained_factory(basetype: type[Any]) -> Callable[..., Any]:
             return ConstrainedStr
         if issubclass(basetype, int) or issubclass(basetype, float):
             return ConstrainedNumber
-        if issubclass(basetype, datetime):
-            return ConstrainedDatetime
+        if (
+            issubclass(basetype, datetime)
+            or issubclass(basetype, date)
+            or issubclass(basetype, time)
+        ):
+            return partial(ConstrainedDatetime, which=basetype)
         if issubclass(basetype, UUID):
             return ConstrainedUUID
         if issubclass(basetype, Enum):
-            return partial(ConstrainedEnum, baseeunm=basetype)
+
+            return partial(ConstrainedEnum, baseenum=basetype)
     else:
         origin = get_origin(basetype)
         args = get_args(basetype)

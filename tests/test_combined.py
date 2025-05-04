@@ -5,7 +5,7 @@ import pytest
 from ctxinject.inject import resolve
 from ctxinject.model import (
     ArgsInjectable,
-    Depends,
+    DependsInject,
     ModelFieldInject,
     UnresolvedInjectableError,
 )
@@ -33,8 +33,8 @@ def sub_dep(
 # Função no primeiro nível de dependência
 def mid_dep(
     name: User,  # resolve por tipo
-    uid: int = Depends(sub_dep),  # resolve via Depends
-    debug: bool = Depends(lambda debug: not debug),  #  resolve por nome
+    uid: int = DependsInject(sub_dep),  # resolve via Depends
+    debug: bool = DependsInject(lambda debug: not debug),  #  resolve por nome
 ) -> str:
     return f"{name}-{uid}-{debug}"
 
@@ -44,8 +44,8 @@ async def handler(
     name: User,  # por tipo
     id: int = ArgsInjectable(),  # por nome
     to: int = ModelFieldInject(Settings, field="timeout"),  # por model + field fallback
-    combined: str = Depends(mid_dep),  # nível 1
-    extra: str = Depends(lambda: "static"),  # independente do contexto
+    combined: str = DependsInject(mid_dep),  # nível 1
+    extra: str = DependsInject(lambda: "static"),  # independente do contexto
 ) -> str:
     return f"{name}|{id}|{to}|{combined}|{extra}"
 

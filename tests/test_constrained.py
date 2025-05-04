@@ -1,9 +1,14 @@
+from datetime import datetime
+from enum import Enum
 from functools import partial
+from typing import Annotated, Any
+from uuid import UUID
 
 import pytest
 
 from ctxinject.constrained import (
     ConstrainedDatetime,
+    ConstrainedEnum,
     ConstrainedList,
     ConstrainedNumber,
     ConstrainedStr,
@@ -11,6 +16,18 @@ from ctxinject.constrained import (
     ValidationError,
     constrained_factory,
 )
+from ctxinject.inject import inject_args
+from ctxinject.validate import ConstrArgInject
+
+
+class MyEnum(Enum):
+    VALID = 0
+    INVALID = 1
+
+
+class Enum2(Enum):
+    FOO = 0
+    BAR = 1
 
 
 def test_constrained_ok() -> None:
@@ -28,6 +45,9 @@ def test_constrained_ok() -> None:
     ConstrainedDatetime("22-12-2007")
     ConstrainedDatetime("22-12-07")
     ConstrainedUUID("3cd4d94e-61e9-4c90-bd39-9207a1fb7227")
+
+    ConstrainedEnum(MyEnum.VALID, MyEnum)
+    ConstrainedEnum(Enum2.FOO, Enum2)
 
 
 def test_constrained_fail() -> None:
@@ -59,6 +79,12 @@ def test_constrained_fail() -> None:
     with pytest.raises(ValidationError):
         ConstrainedUUID("Not A UUID")
 
+    with pytest.raises(ValidationError):
+        ConstrainedEnum(Enum2.BAR, MyEnum)
+
+    with pytest.raises(ValidationError):
+        ConstrainedEnum(MyEnum.VALID, Enum2)
+
 
 def test_factory() -> None:
 
@@ -70,8 +96,79 @@ def test_factory() -> None:
     assert isinstance(constr_list, partial)
     assert "basetype" in constr_list.keywords
     assert constr_list.keywords["basetype"] == str
+    constr_list(["foo", "bar"])
+    with pytest.raises(ValidationError):
+        constr_list([1, 2, 3])
 
-    constr_int = constrained_factory(list[int])
-    assert isinstance(constr_int, partial)
-    assert "basetype" in constr_int.keywords
-    assert constr_int.keywords["basetype"] == int
+    with pytest.raises(ValidationError):
+        constr_list(["1", "2", "3"], min_length=2)
+
+    constr_listint = constrained_factory(list[int])
+    assert isinstance(constr_listint, partial)
+    assert "basetype" in constr_listint.keywords
+    assert constr_listint.keywords["basetype"] == int
+    constr_listint([40, 45])
+    with pytest.raises(ValidationError):
+        constr_listint([40, 45], gt=42)
+
+    constr_enum = constrained_factory(MyEnum)
+    assert isinstance(constr_enum, partial)
+    assert "baseenum" in constr_enum.keywords
+    assert constr_enum.keywords["baseenum"] == MyEnum
+    constr_enum(MyEnum.INVALID)
+
+    with pytest.raises(ValidationError):
+        constr_enum(0)
+
+    constr_date = constrained_factory(datetime)
+    assert isinstance(constr_date, partial)
+    assert "which" in constr_date.keywords
+    assert constr_date.keywords["which"] == datetime
+
+    constr_uuid = constrained_factory(UUID)
+    assert constr_uuid == ConstrainedUUID
+
+
+def func(
+    arg1: Annotated[UUID, 123, ConstrArgInject(...)],
+    arg2: Annotated[datetime, ConstrArgInject(...)],
+    arg3: str = ConstrArgInject(..., min_length=3),
+    arg4: MyEnum = ConstrArgInject(...),
+    arg5: list[str] = ConstrArgInject(..., max_length=5),
+) -> None:
+    return None
+
+
+def test_full_constrained() -> None:
+    ctx: dict[str, Any] = {
+        "arg1": "3cd4d94e-61e9-4c90-bd39-9207a1fb7227",
+        "arg2": "22-12-07",
+        "arg3": "foobar",
+        "arg4": MyEnum.INVALID,
+        "arg5": ["hello"],
+    }
+    inject_args(func, ctx)
+
+
+def test_full_constrained_fail_uuid() -> None:
+    ctx: dict[str, Any] = {
+        "arg1": "NotUUID",
+        "arg2": "22-12-07",
+        "arg3": "foobar",
+        "arg4": MyEnum.INVALID,
+        "arg5": ["hello"],
+    }
+    with pytest.raises(ValidationError):
+        inject_args(func, ctx)
+
+
+def test_full_constrained_fail_datetime() -> None:
+    ctx: dict[str, Any] = {
+        "arg1": "3cd4d94e-61e9-4c90-bd39-9207a1fb7227",
+        "arg2": "99-15-07",
+        "arg3": "foobar",
+        "arg4": MyEnum.INVALID,
+        "arg5": ["hello"],
+    }
+    with pytest.raises(ValidationError):
+        inject_args(func, ctx)

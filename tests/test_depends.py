@@ -1,7 +1,7 @@
 import pytest
 
 from ctxinject.inject import inject_dependencies, resolve  # ou onde estiver seu arquivo
-from ctxinject.model import Depends, UnresolvedInjectableError
+from ctxinject.model import DependsInject, UnresolvedInjectableError
 
 
 # Um contexto básico e modelo fictício
@@ -15,7 +15,7 @@ async def test_simple_dependency_resolution() -> None:
     async def db_dep() -> DB:
         return DB("sqlite://")
 
-    async def handler(db: DB = Depends(db_dep)) -> str:
+    async def handler(db: DB = DependsInject(db_dep)) -> str:
         return db.url
 
     result = await resolve(handler, context={}, overrides={})
@@ -26,7 +26,7 @@ async def test_simple_dependency_extra_arg() -> None:
     def db_dep() -> DB:
         return DB("sqlite://")
 
-    def handler(arg: str, db: DB = Depends(db_dep)) -> str:
+    def handler(arg: str, db: DB = DependsInject(db_dep)) -> str:
         return db.url
 
     with pytest.raises(UnresolvedInjectableError):
@@ -37,7 +37,7 @@ async def test_simple_dependency_extra_arg_inject() -> None:
     def db_dep() -> DB:
         return DB("sqlite://")
 
-    def handler(arg: str, db: DB = Depends(db_dep)) -> str:
+    def handler(arg: str, db: DB = DependsInject(db_dep)) -> str:
         return db.url + arg
 
     handler_resolved = await inject_dependencies(handler, context={}, overrides={})
@@ -50,10 +50,10 @@ async def test_chained_dependency() -> None:
     async def get_url() -> str:
         return "sqlite://"
 
-    async def db_dep(url: str = Depends(get_url)) -> DB:
+    async def db_dep(url: str = DependsInject(get_url)) -> DB:
         return DB(url)
 
-    async def handler(db: DB = Depends(db_dep)) -> str:
+    async def handler(db: DB = DependsInject(db_dep)) -> str:
         return db.url
 
     result = await resolve(handler, context={}, overrides={})
@@ -65,7 +65,7 @@ async def test_mixed_sync_async() -> None:
     def get_config() -> dict[str, str]:
         return {"key": "value"}
 
-    async def service(cfg: dict[str, str] = Depends(get_config)) -> str:
+    async def service(cfg: dict[str, str] = DependsInject(get_config)) -> str:
         return cfg["key"]
 
     result = await resolve(service, context={}, overrides={})
@@ -80,7 +80,7 @@ async def test_annotated_dependency() -> None:
     async def db_dep() -> DB:
         return DB("sqlite://")
 
-    async def handler(db: Annotated[DB, Depends(db_dep)]) -> str:
+    async def handler(db: Annotated[DB, DependsInject(db_dep)]) -> str:
         return db.url
 
     result = await resolve(handler, context={}, overrides={})
@@ -92,10 +92,10 @@ async def test_annotated_with_extras_dependency() -> None:
     async def get_url() -> str:
         return "sqlite://"
 
-    async def db_dep(url: Annotated[str, Depends(get_url), "meta"]) -> DB:
+    async def db_dep(url: Annotated[str, DependsInject(get_url), "meta"]) -> DB:
         return DB(url)
 
-    async def handler(db: Annotated[DB, Depends(db_dep)]) -> str:
+    async def handler(db: Annotated[DB, DependsInject(db_dep)]) -> str:
         return db.url
 
     result = await resolve(handler, context={}, overrides={})
@@ -111,8 +111,8 @@ async def test_mixed_annotated_and_default() -> None:
         return {"timeout": "30s"}
 
     async def handler(
-        url: Annotated[str, Depends(get_url)],
-        cfg: Annotated[dict[str, str], Depends(get_config)] = {"timeout": "60s"},
+        url: Annotated[str, DependsInject(get_url)],
+        cfg: Annotated[dict[str, str], DependsInject(get_config)] = {"timeout": "60s"},
     ) -> str:
         return f"{url} with timeout {cfg['timeout']}"
 
@@ -151,21 +151,25 @@ async def test_deeply_nested_dependencies() -> None:
     def provide_flag() -> bool:
         return True
 
-    def provide_b(a: A = Depends(provide_a), flag: bool = Depends(provide_flag)) -> B:
+    def provide_b(
+        a: A = DependsInject(provide_a), flag: bool = DependsInject(provide_flag)
+    ) -> B:
         return B(a, flag)
 
     def provide_config() -> dict:
         return {"retry": 3}
 
     def provide_c(
-        b: B = Depends(provide_b), config: dict = Depends(provide_config)
+        b: B = DependsInject(provide_b), config: dict = DependsInject(provide_config)
     ) -> C:
         return C(b, config)
 
     def provide_x() -> int:
         return 99
 
-    async def handler(c: C = Depends(provide_c), x: int = Depends(provide_x)) -> str:
+    async def handler(
+        c: C = DependsInject(provide_c), x: int = DependsInject(provide_x)
+    ) -> str:
         return f"{c.b.a.value}-{c.b.flag}-{c.config['retry']}-{x}"
 
     result = await resolve(handler, context={}, overrides={})
