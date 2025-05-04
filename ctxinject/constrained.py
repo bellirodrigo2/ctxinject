@@ -9,6 +9,7 @@ from typing import (
     Literal,
     Mapping,
     Optional,
+    Sequence,
     Union,
     get_args,
     get_origin,
@@ -29,9 +30,8 @@ def ConstrainedStr(
     pattern: Optional[str] = None,
     **_: Any,
 ) -> str:
-    if not isinstance(value, str):  # type: ignore
-        raise ValidationError("Value must be a string")
-
+    # if not isinstance(value, str):  # type: ignore
+    # raise ValidationError("Value must be a string")
     if min_length is not None and not (min_length <= len(value)):
         raise ValidationError(f"String length must be minimun {min_length}")
     if max_length is not None and not (len(value) <= max_length):
@@ -52,8 +52,8 @@ def ConstrainedNumber(
     multiple_of: Optional[Union[int, float]] = None,
     **_: Any,
 ) -> Union[int, float]:
-    if not isinstance(value, int) and not isinstance(value, float):  # type: ignore
-        raise ValidationError("Value must be an integer or float")
+    # if not isinstance(value, int) and not isinstance(value, float):  # type: ignore
+    # raise ValidationError("Value must be an integer or float")
 
     if gt is not None and not value > gt:
         raise ValidationError(f"Value must be > {gt}")
@@ -69,41 +69,35 @@ def ConstrainedNumber(
     return value
 
 
-def ConstrainedList(
-    value: list[Any],
-    basetype: type[Any],
+def ConstrainedItems(
+    value: Sequence[Any],
+    basetype: tuple[type[Any], ...],
+    values_check: Optional[Mapping[str, Any]] = None,
     min_items: Optional[int] = None,
     max_items: Optional[int] = None,
     **kwargs: Any,
 ) -> list[Any]:
-    if not isinstance(value, list) and not isinstance(value, tuple) and not isinstance(value, set):  # type: ignore
-        raise ValidationError("Value must be a List, Tuple or Set")
+    # if not isinstance(value, list) and not isinstance(value, tuple) and not isinstance(value, set):  # type: ignore
+    # raise ValidationError("Value must be a List, Tuple or Set")
 
     if min_items is not None and not len(value) > min_items:
-        raise ValidationError(f"List length should be greater than {min_items}")
+        raise ValidationError(f"Iterable arg length should be greater than {min_items}")
 
     if max_items is not None and not len(value) < max_items:
-        raise ValidationError(f"List length should be lower than {max_items}")
+        raise ValidationError(f"Iterable arg length should be lower than {max_items}")
 
-    constrained = constrained_factory(basetype)
-    for item in value:
+    v = value
+    if isinstance(value, dict):
+        v = list(value.keys())
+
+    constrained = constrained_factory(basetype[0])
+    for item in v:
         constrained(item, **kwargs)
-    return value
+    if isinstance(value, dict) and values_check is not None:
+        constrained = constrained_factory(basetype[1])
+        for item in value.values():
+            constrained(item, **kwargs)
 
-
-def ConstrainedDict(
-    value: Mapping[Any, Any],
-    min_items: Optional[int] = None,
-    max_items: Optional[int] = None,
-) -> Mapping[Any, Any]:
-    if not isinstance(value, dict):  # type: ignore
-        raise TypeError("Value must be a Dict")
-
-    if min_items is not None and not len(value) > min_items:
-        raise ValidationError(f"Dict length should be greater than {min_items}")
-
-    if max_items is not None and not len(value) < max_items:
-        raise ValidationError(f"Dict length should be lower than {max_items}")
     return value
 
 
@@ -172,12 +166,10 @@ def constrained_factory(basetype: type[Any]) -> Callable[..., Any]:
         if origin is Annotated:
             origin = get_origin(args[0])
             args = get_args(args[0])
-        if origin is list or origin is tuple or origin is set:
-            return partial(ConstrainedList, basetype=args[0])
-        if origin is dict:
-            return partial(ConstrainedDict, key=args[0], value=args[1])
+        if origin is list or origin is tuple or origin is set or origin is dict:
+            return partial(ConstrainedItems, basetype=args)
 
-    def return_only(value: Any) -> Any:
+    def return_only(value: Any, **kwargs: Any) -> Any:
         return value
 
     return return_only

@@ -106,7 +106,7 @@ class ConstrArgInject(ArgsInjectable):
         if self._custom_validator is not None:
             instance = self._custom_validator(instance)
         constr = constrained_factory(basetype)
-        value = constr(instance)
+        value = constr(instance, **self.meta)
         return value
 
 
