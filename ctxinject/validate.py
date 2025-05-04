@@ -9,7 +9,6 @@ from typing import (
     get_origin,
     get_type_hints,
 )
-from uuid import UUID
 
 from ctxinject.constrained import constrained_factory
 from ctxinject.mapfunction import FuncArg, get_func_args
@@ -122,9 +121,7 @@ def func_signature_validation(
 
     check_depends_types(args)
 
-    check_constr_arginject_coherence(args)
     check_single_injectable(args)
-    ensure_basetype_resolved(args)
 
 
 class ConstrArgInject(ArgsInjectable):

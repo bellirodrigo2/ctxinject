@@ -21,6 +21,7 @@ from ctxinject.validate import (
     check_all_typed,
     check_depends_types,
     check_modefield_types,
+    func_signature_validation,
 )
 from tests.test_constrained import MyEnum
 
@@ -138,3 +139,69 @@ def test_multiple_injectables_error() -> None:
 
     with pytest.raises(TypeError, match="multiple injectables"):
         check_single_injectable(get_func_args(func))
+
+
+def valid_func(
+    arg1: Annotated[UUID, 123, ConstrArgInject(...)],
+    arg2: Annotated[datetime, ConstrArgInject(...)],
+    arg3: str = ConstrArgInject(..., min_length=3),
+    arg4: MyEnum = ConstrArgInject(...),
+    arg5: list[str] = ConstrArgInject(..., max_length=5),
+) -> None:
+    return None
+
+
+def test_func_signature_validation_success() -> None:
+    # Deve passar sem exceção
+    func_signature_validation(valid_func, [])
+
+
+def untyped_func(arg1, arg2: int) -> None:
+    pass
+
+
+def test_func_signature_validation_untyped() -> None:
+    with pytest.raises(TypeError):
+        func_signature_validation(untyped_func, [])
+
+
+def uninjectable_func(arg1: Path) -> None:
+    pass
+
+
+def test_func_signature_validation_uninjectable() -> None:
+    with pytest.raises(UnInjectableError):
+        func_signature_validation(uninjectable_func, [])
+
+
+def invalid_model_field_func(arg: Annotated[str, ModelFieldInject(model=123)]) -> None:
+    pass
+
+
+def test_func_signature_validation_invalid_model() -> None:
+    with pytest.raises(InvalidInjectableDefinition):
+        func_signature_validation(invalid_model_field_func, [])
+
+
+def get_dep():
+    return "value"
+
+
+def bad_dep_func(arg: Annotated[str, Depends(get_dep)]) -> None:
+    pass
+
+
+def test_func_signature_validation_bad_depends() -> None:
+    with pytest.raises(TypeError):
+        func_signature_validation(bad_dep_func, [])
+
+
+def bad_multiple_inject_func(
+    arg: Annotated[str, ConstrArgInject(...), ModelFieldInject(model=str)],
+) -> None:
+    pass
+
+
+def test_func_signature_validation_conflicting_injectables() -> None:
+    with pytest.raises(Exception):  # Substituir pela exceção certa, se houver
+        func_signature_validation(bad_multiple_inject_func, [])
