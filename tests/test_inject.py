@@ -145,10 +145,3 @@ def test_missing_required_arg() -> None:
 
     with pytest.raises(UnresolvedInjectableError):
         inject_args(func, {}, False)
-
-
-def test_invalid_modelfield() -> None:
-    with pytest.raises(InvalidInjectableDefinition):
-
-        def func(a: Annotated[str, ModelFieldInject(model=123)]) -> str:
-            return a

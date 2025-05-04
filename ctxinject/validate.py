@@ -1,4 +1,15 @@
-from typing import Any, Callable, Iterable, Optional, Sequence, get_type_hints
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Iterable,
+    Optional,
+    Sequence,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
+from uuid import UUID
 
 from ctxinject.constrained import constrained_factory
 from ctxinject.mapfunction import FuncArg, get_func_args
@@ -6,6 +17,7 @@ from ctxinject.model import (
     ArgsInjectable,
     DependsInject,
     Injectable,
+    InvalidInjectableDefinition,
     InvalidModelFieldType,
     ModelFieldInject,
     UnInjectableError,
@@ -44,6 +56,10 @@ def check_modefield_types(
     for arg in args:
         modelfield_inj = arg.getinstance(ModelFieldInject)
         if modelfield_inj is not None:
+            if not isinstance(modelfield_inj.model, type):  # type: ignore
+                raise InvalidInjectableDefinition(
+                    f'ModelFieldInject "model" field should be a type, but {type(modelfield_inj.model)} found'
+                )
             field_types = get_type_hints(modelfield_inj.model)
             argtype = field_types.get(arg.name, None)
             if argtype is None or not arg.istype(argtype):
@@ -60,7 +76,13 @@ def check_depends_types(
         if arg.hasinstance(tgttype)
     ]
     for arg_name, dep_type, dep_func in deps:
+
+        if not callable(dep_func):
+            raise TypeError(f"Depends value should be a callable. Found '{dep_func}'.")
+
         return_type = get_type_hints(dep_func).get("return")
+        if get_origin(return_type) is Annotated:
+            return_type = get_args(return_type)[0]
         if return_type is None or not isinstance(return_type, type):
             raise TypeError(
                 f"Depends Return Type should a be type, but {return_type} was found."
@@ -73,6 +95,16 @@ def check_depends_types(
             raise TypeError(
                 f"Depends function {dep_func} return type should be a subclass of {dep_type}, but {return_type} was found"
             )
+
+
+def check_single_injectable(args: Sequence[FuncArg]) -> None:
+    for arg in args:
+        if arg.extras is not None:
+            injectables = [x for x in arg.extras if isinstance(x, Injectable)]
+            if len(injectables) > 1:
+                raise TypeError(
+                    f"Argument '{arg.name}' has multiple injectables: {[type(i).__name__ for i in injectables]}"
+                )
 
 
 def func_signature_validation(
@@ -89,6 +121,10 @@ def func_signature_validation(
     check_modefield_types(args)
 
     check_depends_types(args)
+
+    check_constr_arginject_coherence(args)
+    check_single_injectable(args)
+    ensure_basetype_resolved(args)
 
 
 class ConstrArgInject(ArgsInjectable):
@@ -112,24 +148,3 @@ class ConstrArgInject(ArgsInjectable):
 
 class Depends(DependsInject):
     pass
-    # def validate(self, instance: Any, basetype: type[Any]) -> Any:
-
-    #     if not callable(instance):
-    #         raise TypeError(f"Depends value should be a callable. Found '{instance}'.")
-    #     return_type = get_type_hints(instance).get("return")
-
-    #     if not isinstance(basetype, type):  # type: ignore
-    #         raise TypeError(
-    #             f"Depends Base Type should a be type, but {type(basetype)} was found."
-    #         )
-
-    #     if not return_type or not isinstance(return_type, type):
-    #         raise TypeError(
-    #             f"Depends Return Type should a be type, but {type(basetype)} was found."
-    #         )
-
-    #     if not issubclass(basetype, return_type):
-    #         raise TypeError(
-    #             f'Depends Function "{instance.__name__}" returns a "{return_type}", but function signature expects a {basetype}'
-    #         )
-    #     return instance

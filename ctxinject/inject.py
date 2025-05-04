@@ -2,6 +2,7 @@ import inspect
 from functools import partial
 from typing import Any, Callable, Iterable, Mapping, Union
 
+from ctxinject.constrained import ValidationError
 from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
     ArgsInjectable,
@@ -48,7 +49,10 @@ def resolve_ctx(
             )
         if value is not None:
             if instance is not None and arg.basetype is not None:
-                value = instance.validate(value, arg.basetype)
+                validated = instance.validate(value, arg.basetype)
+                if validated is None:
+                    raise ValidationError(f"Validation for {arg.name} returned None")
+                value = validated
             ctx[arg.name] = value
     return ctx
 

@@ -6,7 +6,6 @@ from typing import (
     Annotated,
     Any,
     Callable,
-    Literal,
     Mapping,
     Optional,
     Sequence,
@@ -80,11 +79,10 @@ def ConstrainedItems(
     # if not isinstance(value, list) and not isinstance(value, tuple) and not isinstance(value, set):  # type: ignore
     # raise ValidationError("Value must be a List, Tuple or Set")
 
-    if min_items is not None and not len(value) > min_items:
-        raise ValidationError(f"Iterable arg length should be greater than {min_items}")
-
-    if max_items is not None and not len(value) < max_items:
-        raise ValidationError(f"Iterable arg length should be lower than {max_items}")
+    if min_items is not None and len(value) < min_items:
+        raise ValidationError(...)
+    if max_items is not None and len(value) > max_items:
+        raise ValidationError(...)
 
     v = value
     if isinstance(value, dict):
@@ -134,7 +132,7 @@ def ConstrainedUUID(value: str, **_: Any) -> UUID:
         )
 
 
-def ConstrainedEnum(value: Any, baseenum: Any, **_: Any) -> UUID:
+def ConstrainedEnum(value: Any, baseenum: type[Enum], **_: Any) -> Enum:
     if not isinstance(value, baseenum):
         raise ValidationError(
             f'Arg should be of type "{baseenum}", but "{type(value)}" was found'

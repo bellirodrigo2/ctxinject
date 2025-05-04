@@ -151,6 +151,24 @@ def test_factory() -> None:
     constr_uuid = constrained_factory(UUID)
     assert constr_uuid == ConstrainedUUID
 
+    factory = constrained_factory(Annotated[list[int], "whatever"])
+    assert isinstance(factory, partial)
+    assert factory.keywords["basetype"][0] == int
+
+
+def test_constrained_factory_fallback() -> None:
+    class Unsupported:
+        pass
+
+    factory = constrained_factory(Unsupported)
+    assert callable(factory)
+    assert factory("any") == "any"  # just returns the value
+
+
+def test_constrained_str_none_allowed_fallback() -> None:
+    result = ConstrainedStr("abc", min_length=2)
+    assert result == "abc"
+
 
 def func(
     arg1: Annotated[UUID, 123, ConstrArgInject(...)],
@@ -195,3 +213,17 @@ def test_full_constrained_fail_datetime() -> None:
     }
     with pytest.raises(ValidationError):
         inject_args(func, ctx)
+
+
+def test_constrained_items_set_tuple() -> None:
+    ConstrainedItems({1, 2}, [int], min_items=1, max_items=3, gt=0)
+
+    with pytest.raises(ValidationError):
+        ConstrainedItems((1, 2, 3, 4), [int], max_items=3)
+
+
+def test_constrained_datetime_custom_format() -> None:
+    assert ConstrainedDatetime("2024-05-01", fmt="%Y-%m-%d") == datetime(2024, 5, 1)
+
+    with pytest.raises(ValidationError):
+        ConstrainedDatetime("01/05/2024", fmt="%Y-%m-%d")
