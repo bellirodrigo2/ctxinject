@@ -191,12 +191,18 @@ def test_annotated_none(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
 
 def test_union(funcsmap: Mapping[str, Callable[..., Any]]) -> None:
     args = get_func_args(funcsmap["union"])
-    assert len(args) == 2
+    assert len(args) == 3
     assert args[0].argtype == Union[int, str]
+    assert args[0].basetype == Union[int, str]
     assert args[0].default == NO_DEFAULT
     assert args[1].default is None
     assert args[1].basetype == Optional[float]
     assert args[1].argtype == Optional[float]
+    assert args[2].argtype == Annotated[Union[int, str], 1]
+    assert args[2].basetype == Union[int, str]
+    assert args[2].default == 2
+    assert args[2].has_default
+    assert args[2].extras == (1,)
 
 
 def test_varargs(funcsmap: Mapping[str, Callable[..., Any]]) -> None:

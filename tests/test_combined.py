@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from ctxinject.dependencies import DependencyRegistry
+from ctxinject.inject import resolve
 from ctxinject.model import (
-    ArgNameInjec,
+    ArgsInjectable,
     Depends,
     ModelFieldInject,
     UnresolvedInjectableError,
@@ -22,7 +22,7 @@ class Settings:
 
 # Função no segundo nível de dependência
 def sub_dep(
-    uid: int = ArgNameInjec(...),  # resolve por nome
+    uid: int = ArgsInjectable(...),  # resolve por nome
     timeout: int = ModelFieldInject(
         Settings, field="timeout"
     ),  # resolve por model.field
@@ -42,7 +42,7 @@ def mid_dep(
 # Handler principal, com múltiplas fontes de contexto
 async def handler(
     name: User,  # por tipo
-    id: int = ArgNameInjec(),  # por nome
+    id: int = ArgsInjectable(),  # por nome
     to: int = ModelFieldInject(Settings, field="timeout"),  # por model + field fallback
     combined: str = Depends(mid_dep),  # nível 1
     extra: str = Depends(lambda: "static"),  # independente do contexto
@@ -54,17 +54,14 @@ async def handler(
 async def test_mixed_injectables() -> None:
     # Contexto fornecido
     context = {
-        "id": 42,  # para ArgNameInjec
+        "id": 42,  # para ArgsInjectable
         "uid": 99,
         "debug": False,
         User: "Alice",  # para name (por tipo)
         Settings: Settings(debug=True, timeout=30),  # para ModelFieldInject e debug
     }
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(
-        handler, context=context, modeltype=[Settings, User]
-    )
+    result = await resolve(handler, context=context, overrides={})
     assert result == "Alice|42|30|Alice-99-False|static"
 
 
@@ -72,13 +69,11 @@ async def test_mixed_injectables() -> None:
 async def test_mixed_injectables_missing_ctx() -> None:
     # Contexto fornecido
     context = {
-        "id": 42,  # para ArgNameInjec
+        "id": 42,  # para ArgsInjectable
         "debug": False,
         User: "Alice",  # para name (por tipo)
         Settings: Settings(debug=True, timeout=30),  # para ModelFieldInject e debug
     }
 
-    registry = DependencyRegistry()
-
     with pytest.raises(UnresolvedInjectableError):
-        await registry.resolve(handler, context=context, modeltype=[Settings, User])
+        await resolve(handler, context=context, overrides={})

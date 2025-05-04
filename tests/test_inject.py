@@ -3,7 +3,7 @@ from typing import Annotated, Any, Union
 
 import pytest
 
-from ctxinject.inject import inject
+from ctxinject.inject import inject_args
 from ctxinject.mapfunction import get_func_args
 from ctxinject.model import (
     ArgsInjectable,
@@ -23,9 +23,10 @@ class No42(ArgsInjectable):
     def __init__(self, default: Any) -> None:
         super().__init__(default)
 
-    def validate(self, instance: Any) -> None:
+    def validate(self, instance: Any, basetype: type[Any]) -> None:
         if instance == 42:
             raise ValueError
+        return instance
 
 
 class MyModel(int): ...
@@ -59,7 +60,7 @@ def test_inject_by_name() -> None:
         "e": "foobar",
         "h": 0.1,
     }
-    injected = inject(injfunc, ctx, [MyModel])
+    injected = inject_args(injfunc, ctx)
 
     assert isinstance(injected, partial)
     res = injected()
@@ -73,14 +74,14 @@ def test_inject_by_type() -> None:
         MyModel: 100,
         MyModelField: MyModelField(e="foobar", f=2.2),
     }
-    injected = inject(injfunc, ctx, [MyModel])
+    injected = inject_args(injfunc, ctx)
     res = injected(a="X")
     assert res == ("X", "typed!", 100, 43, "foobar", 3.14, True, 2.2)
 
 
 def test_inject_default_used() -> None:
     ctx = {"a": "A", "c": 100, "e": "hello", "h": 0.12}  # 'b' and 'd' will be  default
-    injected = inject(injfunc, ctx, [MyModel])
+    injected = inject_args(injfunc, ctx)
     assert injected() == (
         "A",
         "abc",  # default
@@ -96,9 +97,7 @@ def test_inject_default_used() -> None:
 def test_inject_changed_func() -> None:
     deps = get_func_args(injfunc)
     ctx = {"a": "foobar", "b": "helloworld"}
-    resolfunc = inject(
-        func=injfunc, context=ctx, modeltype=[MyModel], allow_incomplete=True
-    )
+    resolfunc = inject_args(func=injfunc, context=ctx, allow_incomplete=True)
     args = get_func_args(resolfunc)
     assert args != deps
 
@@ -106,12 +105,12 @@ def test_inject_changed_func() -> None:
 def test_inject_chained() -> None:
     deps = get_func_args(injfunc)
     ctx = {"a": "foobar"}
-    resolfunc = inject(injfunc, ctx, [MyModel], True)
+    resolfunc = inject_args(injfunc, ctx, True)
     args = get_func_args(resolfunc)
     assert args != deps
 
     ctx2 = {"c": 2}
-    resolfunc2 = inject(resolfunc, ctx2, [MyModel], True)
+    resolfunc2 = inject_args(resolfunc, ctx2, True)
     args2 = get_func_args(resolfunc2)
     assert args != args2
 
@@ -125,7 +124,7 @@ def test_inject_name_over_type() -> None:
         "e": "x",
         "h": 0.0,
     }
-    injected = inject(injfunc, ctx, [MyModel])
+    injected = inject_args(injfunc, ctx, [MyModel])
     res = injected()
     assert res[1] == "by_name"  # name should have preference
 
@@ -145,7 +144,7 @@ def test_missing_required_arg() -> None:
         return a
 
     with pytest.raises(UnresolvedInjectableError):
-        inject(func, {}, [])
+        inject_args(func, {}, False)
 
 
 def test_invalid_modelfield() -> None:

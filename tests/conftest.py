@@ -40,6 +40,7 @@ def func_annotated_none(
 def func_union(
     arg1: Union[int, str],
     arg2: Optional[float] = None,
+    arg3: Annotated[Union[int, str], 1] = 2,
 ) -> None:
     pass
 

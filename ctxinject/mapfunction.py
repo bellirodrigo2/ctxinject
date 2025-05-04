@@ -31,8 +31,8 @@ T = TypeVar("T")
 @dataclass(frozen=True)
 class FuncArg:
     name: str
-    argtype: Optional[type]
-    basetype: Optional[type]
+    argtype: Optional[type[Any]]
+    basetype: Optional[type[Any]]
     default: Optional[Any]
     has_default: bool = False
     extras: Optional[tuple[Any]] = None

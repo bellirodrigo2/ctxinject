@@ -1,30 +1,15 @@
+import inspect
 from functools import partial
-from typing import Any, Callable, Iterable, Mapping, Sequence, Union
+from typing import Any, Callable, Iterable, Mapping, Union
 
 from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
     ArgsInjectable,
+    Depends,
     ICallableInjectable,
     ModelFieldInject,
     UnresolvedInjectableError,
 )
-
-
-def get_required_args(
-    arglist: Sequence[FuncArg], modeltype: Iterable[type[Any]]
-) -> Iterable[FuncArg]:
-    ctxrequired: list[FuncArg] = []
-    for arg in arglist:
-        if arg.hasinstance(ArgsInjectable):
-            ctxrequired.append(arg)
-        else:
-            for model in modeltype:
-                if arg.istype(model):
-                    ctxrequired.append(arg)
-            if arg.hasinstance(ICallableInjectable):
-                ctxrequired.append(arg)
-
-    return ctxrequired
 
 
 def resolve_ctx(
@@ -34,12 +19,14 @@ def resolve_ctx(
 ) -> Mapping[str, Any]:
     ctx: dict[str, Any] = {}
 
-    argsname = [a.name for a in args]
-
     for arg in args:
         instance = arg.getinstance(ArgsInjectable)
+        default_ = instance.default if instance else None
+        bt = arg.basetype
+        value = None
+
         if arg.name in context:  # by name
-            ctx[arg.name] = context[arg.name]
+            value = context[arg.name]
 
         elif instance is not None and isinstance(
             instance, ModelFieldInject
@@ -48,35 +35,76 @@ def resolve_ctx(
             tgtmodel = instance.model
             tgt_field = instance.field or arg.name
             if tgtmodel in context:
-                ctx[arg.name] = getattr(context[tgtmodel], tgt_field)
+                value = getattr(context[tgtmodel], tgt_field)
 
-        elif arg.basetype is not None and arg.basetype in context:  # by type
-            ctx[arg.name] = context[arg.basetype]
+        elif bt is not None and bt in context:  # by type
+            value = context[bt]
 
-        elif instance is not None and instance.default is not Ellipsis:  # by default
-            ctx[arg.name] = instance.default
+        elif default_ is not None and default_ is not Ellipsis:  # by default
+            value = default_
         elif not allow_incomplete:
             raise UnresolvedInjectableError(
                 f"Argument '{arg.name}' is incomplete or missing a valid injectable context."
             )
-
+        if value is not None:
+            if instance is not None and arg.basetype is not None:
+                value = instance.validate(value, arg.basetype)
+            ctx[arg.name] = value
     return ctx
 
 
-def validate_context(context: Mapping[Union[str, type], Any]) -> None: ...
-
-
-def inject(
+def inject_args(
     func: Callable[..., Any],
     context: Mapping[Union[str, type], Any],
-    modeltype: Iterable[type[Any]],
-    allow_incomplete: bool = False,
-    validate_ctx: bool = False,
+    allow_incomplete: bool = True,
 ) -> partial[Any]:
-    if validate_ctx:
-        validate_context(context)
     funcargs = get_func_args(func)
-    required_args = get_required_args(funcargs, modeltype)
-    ctx = resolve_ctx(required_args, context, allow_incomplete)
+    ctx = resolve_ctx(funcargs, context, allow_incomplete)
 
     return partial(func, **ctx)
+
+
+async def inject_dependencies(
+    func: Callable[..., Any],
+    context: Mapping[Union[str, type], Any],
+    # modeltype: Iterable[type[Any]],
+    overrides: Mapping[Callable[..., Any], Callable[..., Any]],
+    tgttype: type[ICallableInjectable] = Depends,
+) -> Callable[..., Any]:
+    depfunc = overrides.get(func, func)
+    argsfunc = get_func_args(depfunc)
+    deps: list[tuple[str, Any]] = [
+        (arg.name, arg.getinstance(tgttype).default)  # type: ignore
+        for arg in argsfunc
+        if arg.hasinstance(tgttype)
+    ]
+    if not deps:
+        return depfunc
+    dep_ctx: dict[Union[str, type], Any] = {}
+    for name, dep in deps:
+        dep_ctx[name] = await resolve(dep, context, overrides, tgttype)
+    resolved = inject_args(depfunc, dep_ctx, allow_incomplete=True)
+    return resolved
+
+
+async def resolve(
+    func: Callable[..., Any],
+    context: Mapping[Union[str, type], Any],
+    # modeltype: Iterable[type[Any]],
+    overrides: Mapping[Callable[..., Any], Callable[..., Any]],
+    tgttype: type[ICallableInjectable] = Depends,
+) -> Any:
+    depfunc = overrides.get(func, func)
+    injdepfunc = inject_args(depfunc, context, allow_incomplete=True)
+    resolved_func = await inject_dependencies(injdepfunc, context, overrides, tgttype)
+    args = get_func_args(resolved_func)
+    if args:
+        raise UnresolvedInjectableError(
+            f"Arguments unresolved in '{func.__name__}': {[a.name for a in args]}"
+        )
+
+    async def _run(partial_fn: Callable[..., Any]) -> Any:
+        result = partial_fn()
+        return await result if inspect.isawaitable(result) else result
+
+    return await _run(resolved_func)

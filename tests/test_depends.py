@@ -1,7 +1,7 @@
 import pytest
 
-from ctxinject.dependencies import DependencyRegistry  # ou onde estiver seu arquivo
-from ctxinject.model import Depends
+from ctxinject.inject import inject_dependencies, resolve  # ou onde estiver seu arquivo
+from ctxinject.model import Depends, UnresolvedInjectableError
 
 
 # Um contexto básico e modelo fictício
@@ -18,9 +18,31 @@ async def test_simple_dependency_resolution() -> None:
     async def handler(db: DB = Depends(db_dep)) -> str:
         return db.url
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(handler, context={}, modeltype=[DB])
+    result = await resolve(handler, context={}, overrides={})
     assert result == "sqlite://"
+
+
+async def test_simple_dependency_extra_arg() -> None:
+    def db_dep() -> DB:
+        return DB("sqlite://")
+
+    def handler(arg: str, db: DB = Depends(db_dep)) -> str:
+        return db.url
+
+    with pytest.raises(UnresolvedInjectableError):
+        await resolve(handler, context={}, overrides={})
+
+
+async def test_simple_dependency_extra_arg_inject() -> None:
+    def db_dep() -> DB:
+        return DB("sqlite://")
+
+    def handler(arg: str, db: DB = Depends(db_dep)) -> str:
+        return db.url + arg
+
+    handler_resolved = await inject_dependencies(handler, context={}, overrides={})
+    res = handler_resolved(arg="foobar")
+    assert res == "sqlite://foobar"
 
 
 @pytest.mark.asyncio
@@ -34,8 +56,7 @@ async def test_chained_dependency() -> None:
     async def handler(db: DB = Depends(db_dep)) -> str:
         return db.url
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(handler, context={}, modeltype=[DB])
+    result = await resolve(handler, context={}, overrides={})
     assert result == "sqlite://"
 
 
@@ -47,8 +68,7 @@ async def test_mixed_sync_async() -> None:
     async def service(cfg: dict[str, str] = Depends(get_config)) -> str:
         return cfg["key"]
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(service, context={}, modeltype=[])
+    result = await resolve(service, context={}, overrides={})
     assert result == "value"
 
 
@@ -63,8 +83,7 @@ async def test_annotated_dependency() -> None:
     async def handler(db: Annotated[DB, Depends(db_dep)]) -> str:
         return db.url
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(handler, context={}, modeltype=[DB])
+    result = await resolve(handler, context={}, overrides={})
     assert result == "sqlite://"
 
 
@@ -79,8 +98,7 @@ async def test_annotated_with_extras_dependency() -> None:
     async def handler(db: Annotated[DB, Depends(db_dep)]) -> str:
         return db.url
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(handler, context={}, modeltype=[DB])
+    result = await resolve(handler, context={}, overrides={})
     assert result == "sqlite://"
 
 
@@ -98,8 +116,7 @@ async def test_mixed_annotated_and_default() -> None:
     ) -> str:
         return f"{url} with timeout {cfg['timeout']}"
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(handler, context={}, modeltype=[])
+    result = await resolve(handler, context={}, overrides={})
     assert result == "sqlite:// with timeout 30s"
 
 
@@ -151,6 +168,5 @@ async def test_deeply_nested_dependencies() -> None:
     async def handler(c: C = Depends(provide_c), x: int = Depends(provide_x)) -> str:
         return f"{c.b.a.value}-{c.b.flag}-{c.config['retry']}-{x}"
 
-    registry = DependencyRegistry()
-    result = await registry.resolve(handler, context={}, modeltype=[A, B, C, D])
+    result = await resolve(handler, context={}, overrides={})
     assert result == "deep-True-3-99"

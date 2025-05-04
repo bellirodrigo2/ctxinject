@@ -5,7 +5,7 @@ from typing import Any, Callable, Optional, Protocol, runtime_checkable
 class Iinjectable(Protocol):
     @property
     def default(self) -> Any: ...
-    def validate(self, instance: Any) -> None: ...
+    def validate(self, instance: Any, basetype: type[Any]) -> Any: ...
 
 
 class ICallableInjectable(Iinjectable, Protocol):
@@ -23,15 +23,11 @@ class Injectable(Iinjectable):
     def default(self) -> Any:
         return self._default
 
-    def validate(self, instance: Any) -> None:
-        pass
+    def validate(self, instance: Any, basetype: type[Any]) -> Any:
+        return instance
 
 
 class ArgsInjectable(Injectable):
-    pass
-
-
-class ArgNameInjec(ArgsInjectable):
     pass
 
 
@@ -44,6 +40,10 @@ class ModelFieldInject(ArgsInjectable):
         self.model = model
         self.field = field
         super().__init__(..., **meta)
+
+
+class InvalidModelFieldType(Exception):
+    """Raised when an model field injectable has the wrong type."""
 
 
 class InvalidInjectableDefinition(Exception):
@@ -62,8 +62,15 @@ class Depends(CallableInjectable):
 class UnresolvedInjectableError(Exception):
     """Raised when a dependency cannot be resolved in the injection context."""
 
-    def __init__(self, argname: str):
+    ...
+
+
+class UnInjectableError(Exception):
+    """Raised when a function argument cannot be injected."""
+
+    def __init__(self, argname: str, argtype: Optional[type[Any]]):
         super().__init__(
-            f"Argument '{argname}' is incomplete or missing a valid injectable context."
+            f"Argument '{argname}' of type '{argtype}' cannot be injected."
         )
         self.argname = argname
+        self.argtype = argtype
