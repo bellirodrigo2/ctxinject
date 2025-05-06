@@ -37,23 +37,32 @@ class FuncArg:
     has_default: bool = False
     extras: Optional[tuple[Any]] = None
 
+    @property
+    def origin(self) -> Optional[type[Any]]:
+        return get_origin(self.basetype)
+
+    @property
+    def args(self) -> tuple[Any, ...]:
+        return get_args(self.basetype)
+
+
     def istype(self, tgttype: type) -> bool:
         try:
             return self.basetype == tgttype or (issubclass(self.basetype, tgttype))  # type: ignore
         except TypeError:
             return False
 
-    def getinstance(self, tgttype: type[T]) -> Optional[T]:
+    def getinstance(self, tgttype: type[T], default: bool = True) -> Optional[T]:
         if self.extras is not None:
             founds = [e for e in self.extras if isinstance(e, tgttype)]
             if len(founds) > 0:
                 return founds[0]
-        if self.has_default and isinstance(self.default, tgttype):
+        if default and self.has_default and isinstance(self.default, tgttype):
             return self.default
         return None
 
-    def hasinstance(self, tgttype: type) -> bool:
-        return False if self.getinstance(tgttype) is None else True
+    def hasinstance(self, tgttype: type, default: bool = True) -> bool:
+        return False if self.getinstance(tgttype,default) is None else True
 
 
 def func_arg_factory(name: str, param: inspect.Parameter, annotation: type) -> FuncArg:
