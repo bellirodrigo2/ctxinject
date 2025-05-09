@@ -17,7 +17,7 @@ from ctxinject.constrained import (
     constrained_factory,
 )
 from ctxinject.inject import inject_args
-from ctxinject.validate import ConstrArgInject
+from ctxinject.model import ConstrArgInject
 
 
 class MyEnum(Enum):
@@ -171,11 +171,11 @@ def test_constrained_str_none_allowed_fallback() -> None:
 
 
 def func(
-    arg1: Annotated[UUID, 123, ConstrArgInject(...)],
-    arg2: Annotated[datetime, ConstrArgInject(...)],
-    arg3: str = ConstrArgInject(..., min_length=3),
-    arg4: MyEnum = ConstrArgInject(...),
-    arg5: list[str] = ConstrArgInject(..., max_length=5),
+    arg1: Annotated[UUID, 123, ConstrArgInject(constrained_factory,...)],
+    arg2: Annotated[datetime, ConstrArgInject(constrained_factory,...)],
+    arg3: str = ConstrArgInject(constrained_factory,..., min_length=3),
+    arg4: MyEnum = ConstrArgInject(constrained_factory,...),
+    arg5: list[str] = ConstrArgInject(constrained_factory,..., max_length=5),
 ) -> None:
     return None
 

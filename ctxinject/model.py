@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, TypeVar, runtime_checkable
 
 
 @runtime_checkable
@@ -70,3 +70,36 @@ class UnInjectableError(Exception):
         )
         self.argname = argname
         self.argtype = argtype
+
+
+
+T = TypeVar('T')
+
+class Constrained(Protocol[T]):
+    def __call__(self, data: T, **kwargs: object) -> T: ...
+
+ConstrainedFactory = Callable[[type[Any]],Constrained[T]]
+
+class ConstrArgInject(ArgsInjectable):
+    def __init__(
+        self,
+        constrained_factory:ConstrainedFactory,
+        default: Any = ...,
+        custom_validator: Optional[Callable[[Any], Any]] = None,
+        **meta: Any,
+    ):
+        self._default = default
+        self.meta = meta
+        self._custom_validator = custom_validator
+        self._constrained_factory = constrained_factory
+
+    def validate(self, instance: Any, basetype: type[Any]) -> None:
+        if self._custom_validator is not None:
+            instance = self._custom_validator(instance)
+        constr = self._constrained_factory(basetype)
+        value = constr(instance, **self.meta)
+        return value
+
+
+class Depends(DependsInject):
+    pass

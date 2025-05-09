@@ -10,10 +10,8 @@ from typing import (
     get_type_hints,
 )
 
-from ctxinject.constrained import constrained_factory
 from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
-    ArgsInjectable,
     DependsInject,
     Injectable,
     InvalidInjectableDefinition,
@@ -122,26 +120,3 @@ def func_signature_validation(
     check_depends_types(args)
 
     check_single_injectable(args)
-
-
-class ConstrArgInject(ArgsInjectable):
-    def __init__(
-        self,
-        default: Any = ...,
-        custom_validator: Optional[Callable[[Any], Any]] = None,
-        **meta: Any,
-    ):
-        self._default = default
-        self.meta = meta
-        self._custom_validator = custom_validator
-
-    def validate(self, instance: Any, basetype: type[Any]) -> None:
-        if self._custom_validator is not None:
-            instance = self._custom_validator(instance)
-        constr = constrained_factory(basetype)
-        value = constr(instance, **self.meta)
-        return value
-
-
-class Depends(DependsInject):
-    pass

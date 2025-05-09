@@ -13,10 +13,10 @@ from ctxinject.model import (
     InvalidModelFieldType,
     ModelFieldInject,
     UnInjectableError,
-)
-from ctxinject.validate import (
     ConstrArgInject,
     Depends,
+)
+from ctxinject.validate import (
     check_all_injectables,
     check_all_typed,
     check_depends_types,
