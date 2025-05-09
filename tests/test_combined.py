@@ -7,9 +7,9 @@ from ctxinject.model import (
     ArgsInjectable,
     DependsInject,
     ModelFieldInject,
-    UnresolvedInjectableError,
 )
 
+from ctxinject.exceptions import UnresolvedInjectableError
 
 class User(str): ...
 

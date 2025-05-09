@@ -14,11 +14,10 @@ from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
     DependsInject,
     Injectable,
-    InvalidInjectableDefinition,
-    InvalidModelFieldType,
     ModelFieldInject,
-    UnInjectableError,
 )
+
+from ctxinject.exceptions import InvalidInjectableDefinition, InvalidModelFieldType, UnInjectableError
 
 
 def check_all_typed(

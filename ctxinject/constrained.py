@@ -17,10 +17,7 @@ from uuid import UUID
 
 from dateutil.parser import parse
 
-
-class ValidationError(Exception):
-    pass
-
+from ctxinject.exceptions import ValidationError
 
 def ConstrainedStr(
     value: str,

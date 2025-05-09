@@ -8,11 +8,10 @@ from ctxinject.mapfunction import get_func_args
 from ctxinject.model import (
     ArgsInjectable,
     Injectable,
-    InvalidInjectableDefinition,
     ModelFieldInject,
-    UnresolvedInjectableError,
 )
 
+from ctxinject.exceptions import UnresolvedInjectableError
 
 # mocks simples
 class NoValidation(Injectable):

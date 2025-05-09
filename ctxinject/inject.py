@@ -7,10 +7,10 @@ from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
     ArgsInjectable,
     CallableInjectable,
-    ICallableInjectable,
     ModelFieldInject,
-    UnresolvedInjectableError,
 )
+
+from ctxinject.exceptions import UnresolvedInjectableError
 
 def resolve_by_name(context: Mapping[Union[str, type], Any], arg:str):
     return context[arg]

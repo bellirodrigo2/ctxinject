@@ -13,12 +13,11 @@ from ctxinject.constrained import (
     ConstrainedNumber,
     ConstrainedStr,
     ConstrainedUUID,
-    ValidationError,
     constrained_factory,
 )
 from ctxinject.inject import inject_args
 from ctxinject.model import ConstrArgInject
-
+from ctxinject.exceptions import ValidationError
 
 class MyEnum(Enum):
     VALID = 0

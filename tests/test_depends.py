@@ -1,8 +1,8 @@
 import pytest
 
 from ctxinject.inject import inject_dependencies, resolve  # ou onde estiver seu arquivo
-from ctxinject.model import DependsInject, UnresolvedInjectableError
-
+from ctxinject.model import DependsInject
+from ctxinject.exceptions import UnresolvedInjectableError
 
 # Um contexto básico e modelo fictício
 class DB:

@@ -9,10 +9,7 @@ from ctxinject.mapfunction import get_func_args
 from ctxinject.model import (
     ArgsInjectable,
     DependsInject,
-    InvalidInjectableDefinition,
-    InvalidModelFieldType,
     ModelFieldInject,
-    UnInjectableError,
     ConstrArgInject,
     Depends,
 )
@@ -23,6 +20,7 @@ from ctxinject.validate import (
     check_modefield_types,
     func_signature_validation,
 )
+from ctxinject.exceptions import InvalidInjectableDefinition, InvalidModelFieldType, UnInjectableError
 from tests.test_constrained import MyEnum
 
 
