@@ -1,36 +1,57 @@
 import inspect
 from functools import partial
-from typing import Any, Callable, Iterable, Mapping, Union
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Union
 
 from ctxinject.constrained import ValidationError
+from ctxinject.exceptions import UnresolvedInjectableError
 from ctxinject.mapfunction import FuncArg, get_func_args
 from ctxinject.model import (
     ArgsInjectable,
     CallableInjectable,
     ModelFieldInject,
+    ModelMethodInject,
 )
 
-from ctxinject.exceptions import UnresolvedInjectableError
 
-def resolve_by_name(context: Mapping[Union[str, type], Any], arg:str):
+def resolve_by_name(context: Mapping[Union[str, type], Any], arg: str) -> Any:
     return context[arg]
 
-def resolve_by_modelfield(context: Mapping[Union[str, type], Any], model:type[Any], field:str):
+
+def resolve_by_modelfield(
+    context: Mapping[Union[str, type], Any], model: type[Any], field: str
+) -> Any:
     return getattr(context[model], field)
 
-def resolve_by_type(context: Mapping[Union[str, type], Any], bt:type[Any]):
+
+def resolve_by_modelmethod(
+    context: Mapping[Union[str, type], Any], model: type[Any], field: str
+) -> Any:
+    method = getattr(context[model], field)
+    return method()
+
+
+def resolve_by_type(context: Mapping[Union[str, type], Any], bt: type[Any]) -> Any:
     return context[bt]
 
-def resolve_by_default(context:Mapping[Union[str, type], Any], default_:Any):
+
+def resolve_by_default(context: Mapping[Union[str, type], Any], default_: Any) -> Any:
     return default_
 
-def wrap_validate(context:Mapping[Union[str, type], Any],func:Callable[...,Any], instance:ArgsInjectable, bt:type[Any], name:str):
-    
+
+def wrap_validate(
+    context: Mapping[Union[str, type], Any],
+    func: Callable[..., Any],
+    instance: ArgsInjectable,
+    bt: type[Any],
+    name: str,
+) -> Any:
+
     value = func(context)
     validated = instance.validate(value, bt)
     if validated is None:
         raise ValidationError(f"Validation for {name} returned None")
     return validated
+
 
 def map_ctx(
     args: Iterable[FuncArg],
@@ -46,37 +67,56 @@ def map_ctx(
         bt = arg.basetype
         value = None
 
-        if arg.name in context:  # by name
-            value = partial(resolve_by_name, arg = arg.name)
-        elif instance is not None and isinstance(
-            instance, ModelFieldInject
-        ):  # by model field
+        # by name
+        if arg.name in context:
+            value = partial(resolve_by_name, arg=arg.name)
 
-            tgtmodel = instance.model
-            tgt_field = instance.field or arg.name
-            if tgtmodel in context:
-                value = partial(resolve_by_modelfield, model = tgtmodel, field=tgt_field)
-
-        elif bt is not None and bt in context:  # by type
+        # by model field/method
+        elif instance is not None:
+            if isinstance(instance, ModelFieldInject):
+                tgtmodel = instance.model
+                tgt_field = instance.field or arg.name
+                if tgtmodel in context:
+                    value = partial(
+                        resolve_by_modelfield, model=tgtmodel, field=tgt_field
+                    )
+            elif isinstance(instance, ModelMethodInject):  # by model method
+                tgtmodel = instance.model
+                tgt_field = instance.method or arg.name
+                if tgtmodel in context:
+                    value = partial(
+                        resolve_by_modelmethod, model=tgtmodel, field=tgt_field
+                    )
+        # by type
+        if value is None and bt is not None and bt in context:
             value = partial(resolve_by_type, bt=bt)
-
-        elif default_ is not None and default_ is not Ellipsis:  # by default
+        # by default
+        if value is None and default_ is not None and default_ is not Ellipsis:
             value = partial(resolve_by_default, default_=default_)
-        elif not allow_incomplete:
+
+        if value is None and not allow_incomplete:
             raise UnresolvedInjectableError(
                 f"Argument '{arg.name}' is incomplete or missing a valid injectable context."
             )
         if value is not None:
             if validate and instance is not None and arg.basetype is not None:
-                validated = partial(wrap_validate, func=value, instance=instance, bt=arg.basetype, name=arg.name)
-                value = validated
+                value = partial(
+                    wrap_validate,
+                    func=value,
+                    instance=instance,
+                    bt=arg.basetype,
+                    name=arg.name,
+                )
             ctx[arg.name] = value
     return ctx
 
-def resolve_mapped_ctx(input_ctx: Mapping[Union[str, type], Any], mapped_ctx:Mapping[str,Any]):
+
+def resolve_mapped_ctx(
+    input_ctx: Mapping[Union[str, type], Any], mapped_ctx: Mapping[str, Any]
+) -> Dict[Any, Any]:
     results = {}
 
-    for k,v in mapped_ctx.items():
+    for k, v in mapped_ctx.items():
         results[k] = v(input_ctx)
     return results
 
@@ -133,15 +173,16 @@ def inject_args(
     validate: bool = True,
 ) -> partial[Any]:
     funcargs = get_func_args(func)
-    mapped_ctx = map_ctx(funcargs,context,allow_incomplete,validate)
-    ctx = resolve_mapped_ctx(context,mapped_ctx)
+    mapped_ctx = map_ctx(funcargs, context, allow_incomplete, validate)
+    ctx = resolve_mapped_ctx(context, mapped_ctx)
     # ctx = resolve_ctx(funcargs, context, allow_incomplete, validate)
 
     return partial(func, **ctx)
 
-def map_depends(func: Callable[..., Any]):
+
+def map_depends(func: Callable[..., Any]) -> List[tuple[str, Any]]:
     argsfunc = get_func_args(func)
-    deps: list[tuple[str, Any]] = [
+    deps: List[tuple[str, Any]] = [
         (arg.name, arg.getinstance(CallableInjectable).default)  # type: ignore
         for arg in argsfunc
         if arg.hasinstance(CallableInjectable)

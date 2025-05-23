@@ -3,15 +3,16 @@ from typing import Annotated, Any, Union
 
 import pytest
 
+from ctxinject.exceptions import UnresolvedInjectableError
 from ctxinject.inject import inject_args
 from ctxinject.mapfunction import get_func_args
 from ctxinject.model import (
     ArgsInjectable,
     Injectable,
     ModelFieldInject,
+    ModelMethodInject,
 )
 
-from ctxinject.exceptions import UnresolvedInjectableError
 
 # mocks simples
 class NoValidation(Injectable):
@@ -37,7 +38,19 @@ class MyModelField:
         self.f = f
 
 
-# função-alvo
+# ---------- ADICIONADO: Mock de Model com Método ----------
+class MyModelMethod:
+    def __init__(self, prefix: str) -> None:
+        self.prefix = prefix
+
+    def get_value(self) -> str:
+        return f"{self.prefix}_value"
+
+    def other_method(self) -> str:
+        return f"{self.prefix}_other"
+
+
+# função-alvo com ModelFieldInject
 def injfunc(
     a: Annotated[str, ArgsInjectable(...)],
     c: MyModel,
@@ -51,6 +64,18 @@ def injfunc(
     return a, b, c, d, e, f, g, h
 
 
+# ---------- ADICIONADO: função-alvo com ModelMethodInject ----------
+def injfunc_method(
+    x: Annotated[str, ArgsInjectable(...)],
+    y: str = ModelMethodInject(model=MyModelMethod, method="get_value"),  # type: ignore
+    z: str = ModelMethodInject(model=MyModelMethod, method="other_method"),  # type: ignore
+) -> tuple[str, str, str]:
+    return x, y, z
+
+
+# ---------- TESTES EXISTENTES ----------
+
+
 def test_inject_by_name() -> None:
     ctx: dict[Union[str, type], Any] = {
         "a": "hello",
@@ -60,7 +85,6 @@ def test_inject_by_name() -> None:
         "h": 0.1,
     }
     injected = inject_args(injfunc, ctx)
-
     assert isinstance(injected, partial)
     res = injected()
     assert res == ("hello", "world", 123, 44, "foobar", 3.14, True, 0.1)
@@ -144,3 +168,34 @@ def test_missing_required_arg() -> None:
 
     with pytest.raises(UnresolvedInjectableError):
         inject_args(func, {}, False)
+
+
+# ---------- TESTES NOVOS: ModelMethodInject ----------
+
+
+def test_model_method_inject_basic() -> None:
+    ctx = {"x": "test_input", MyModelMethod: MyModelMethod(prefix="basic")}
+    injected = inject_args(injfunc_method, ctx)
+    res = injected()
+    assert res == ("test_input", "basic_value", "basic_other")
+
+
+def test_model_method_inject_name_overrides() -> None:
+    ctx = {
+        "x": "override_test",
+        "y": "by_name_y",
+        "z": "by_name_z",
+        MyModelMethod: MyModelMethod(prefix="should_not_use"),
+    }
+    injected = inject_args(injfunc_method, ctx)
+    res = injected()
+    assert res == ("override_test", "by_name_y", "by_name_z")
+
+
+def test_model_method_inject_missing_model() -> None:
+    ctx = {
+        "x": "fail_case"
+        # MyModelMethod está faltando
+    }
+    with pytest.raises(UnresolvedInjectableError):
+        inject_args(injfunc_method, ctx, allow_incomplete=False)

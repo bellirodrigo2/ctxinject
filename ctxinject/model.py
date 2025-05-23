@@ -33,9 +33,16 @@ class ArgsInjectable(Injectable):
 
 class ModelFieldInject(ArgsInjectable):
     def __init__(self, model: type[Any], field: Optional[str] = None, **meta: Any):
+        super().__init__(..., **meta)
         self.model = model
         self.field = field
+
+
+class ModelMethodInject(ArgsInjectable):
+    def __init__(self, model: type[Any], method: Optional[str] = None, **meta: Any):
         super().__init__(..., **meta)
+        self.model = model
+        self.method = method
 
 
 class CallableInjectable(Injectable, ICallableInjectable):
@@ -47,18 +54,20 @@ class DependsInject(CallableInjectable):
     pass
 
 
+T = TypeVar("T")
 
-T = TypeVar('T')
 
 class Constrained(Protocol[T]):
     def __call__(self, data: T, **kwargs: object) -> T: ...
 
-ConstrainedFactory = Callable[[type[Any]],Constrained[T]]
+
+ConstrainedFactory = Callable[[type[Any]], Constrained[T]]
+
 
 class ConstrArgInject(ArgsInjectable):
     def __init__(
         self,
-        constrained_factory:ConstrainedFactory,
+        constrained_factory: ConstrainedFactory,
         default: Any = ...,
         custom_validator: Optional[Callable[[Any], Any]] = None,
         **meta: Any,
