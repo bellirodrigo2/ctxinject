@@ -1,20 +1,13 @@
+import unittest
 from functools import partial
-from typing import Annotated, Any, Union
+from typing import Annotated, Any, List, Mapping, Union
 
-import pytest
+from typemapping import VarTypeInfo, get_func_args
 
-from ctxinject.exceptions import UnresolvedInjectableError
-from ctxinject.inject import inject_args
-from ctxinject.mapfunction import get_func_args
-from ctxinject.model import (
-    ArgsInjectable,
-    Injectable,
-    ModelFieldInject,
-    ModelMethodInject,
-)
+from ctxinject.inject import UnresolvedInjectableError, inject_args
+from ctxinject.model import ArgsInjectable, Injectable, ModelFieldInject
 
 
-# mocks simples
 class NoValidation(Injectable):
     pass
 
@@ -38,7 +31,6 @@ class MyModelField:
         self.f = f
 
 
-# ---------- ADICIONADO: Mock de Model com Método ----------
 class MyModelMethod:
     def __init__(self, prefix: str) -> None:
         self.prefix = prefix
@@ -50,7 +42,6 @@ class MyModelMethod:
         return f"{self.prefix}_other"
 
 
-# função-alvo com ModelFieldInject
 def injfunc(
     a: Annotated[str, ArgsInjectable(...)],
     c: MyModel,
@@ -64,138 +55,166 @@ def injfunc(
     return a, b, c, d, e, f, g, h
 
 
-# ---------- ADICIONADO: função-alvo com ModelMethodInject ----------
 def injfunc_method(
     x: Annotated[str, ArgsInjectable(...)],
-    y: str = ModelMethodInject(model=MyModelMethod, method="get_value"),  # type: ignore
-    z: str = ModelMethodInject(model=MyModelMethod, method="other_method"),  # type: ignore
+    y: str = ModelFieldInject(model=MyModelMethod, field="get_value"),  # type: ignore
+    z: str = ModelFieldInject(model=MyModelMethod, field="other_method"),  # type: ignore
 ) -> tuple[str, str, str]:
     return x, y, z
 
 
-# ---------- TESTES EXISTENTES ----------
+class TestInjectArgs(unittest.IsolatedAsyncioTestCase):
+
+    async def test_inject_by_name(self) -> None:
+        ctx: dict[Union[str, type], Any] = {
+            "a": "hello",
+            "b": "world",
+            "c": 123,
+            "e": "foobar",
+            "h": 0.1,
+        }
+        injected = await inject_args(injfunc, ctx)
+        self.assertIsInstance(injected, partial)
+        res = injected()
+        self.assertEqual(res, ("hello", "world", 123, 44, "foobar", 3.14, True, 0.1))
+
+    async def test_inject_by_type(self) -> None:
+        ctx: dict[Union[str, type], Any] = {
+            str: "typed!",
+            int: 43,
+            MyModel: 100,
+            MyModelField: MyModelField(e="foobar", f=2.2),
+        }
+        injected = await inject_args(injfunc, ctx)
+        res = injected(a="X")
+        self.assertEqual(res, ("X", "typed!", 100, 43, "foobar", 3.14, True, 2.2))
+
+    async def test_inject_default_used(self) -> None:
+        ctx = {
+            "a": "A",
+            "c": 100,
+            "e": "hello",
+            "h": 0.12,
+        }  # 'b' and 'd' will be default
+        injected = await inject_args(injfunc, ctx)
+        self.assertEqual(
+            injected(),
+            (
+                "A",
+                "abc",  # default
+                100,
+                44,  # default
+                "hello",
+                3.14,
+                True,
+                0.12,
+            ),
+        )
+
+    async def test_inject_changed_func(self) -> None:
+        deps = get_func_args(injfunc)
+        ctx = {"a": "foobar", "b": "helloworld"}
+        resolfunc = await inject_args(func=injfunc, context=ctx, allow_incomplete=True)
+        args = get_func_args(resolfunc)
+        self.assertNotEqual(args, deps)
+
+    async def test_inject_chained(self) -> None:
+        deps = get_func_args(injfunc)
+        ctx = {"a": "foobar"}
+        resolfunc = await inject_args(injfunc, ctx, True)
+        args = get_func_args(resolfunc)
+        self.assertNotEqual(args, deps)
+
+        ctx2 = {"c": 2}
+        resolfunc2 = await inject_args(resolfunc, ctx2, True)
+        args2 = get_func_args(resolfunc2)
+        self.assertNotEqual(args, args2)
+
+    async def test_inject_name_over_type(self) -> None:
+        ctx = {
+            "b": "by_name",
+            str: "by_type",  # should ignore since 'b' is provided by name
+            "a": "ok",
+            "c": 1,
+            "e": "x",
+            "h": 0.0,
+        }
+        injected = await inject_args(injfunc, ctx, [MyModel])
+        res = injected()
+        self.assertEqual(res[1], "by_name")
+
+    def test_annotated_multiple_extras(self) -> None:
+        def func(a: Annotated[int, No42(44), NoValidation()]) -> int:
+            return a
+
+        args = get_func_args(func)
+        arg = args[0]
+        self.assertIsInstance(arg.getinstance(ArgsInjectable), No42)
+        self.assertIsInstance(arg.getinstance(NoValidation), NoValidation)
+
+    async def test_missing_required_arg(self) -> None:
+        def func(a: Annotated[str, ArgsInjectable(...)]) -> str:
+            return a
+
+        with self.assertRaises(UnresolvedInjectableError):
+            await inject_args(func, {}, False)
+
+    async def test_model_method_inject_basic(self) -> None:
+        ctx = {"x": "test_input", MyModelMethod: MyModelMethod(prefix="basic")}
+        injected = await inject_args(injfunc_method, ctx)
+        res = injected()
+        self.assertEqual(res, ("test_input", "basic_value", "basic_other"))
+
+    async def test_model_method_inject_name_overrides(self) -> None:
+        ctx = {
+            "x": "override_test",
+            "y": "by_name_y",
+            "z": "by_name_z",
+            MyModelMethod: MyModelMethod(prefix="should_not_use"),
+        }
+        injected = await inject_args(injfunc_method, ctx)
+        res = injected()
+        self.assertEqual(res, ("override_test", "by_name_y", "by_name_z"))
+
+    async def test_model_method_inject_missing_model(self) -> None:
+        ctx = {
+            "x": "fail_case"
+            # Missing MyModelMethod
+        }
+        with self.assertRaises(UnresolvedInjectableError):
+            await inject_args(injfunc_method, ctx, allow_incomplete=False)
+
+    async def test_model_field_none(self) -> None:
+
+        class MyRequest:
+            def __init__(self, x: int) -> None:
+                self.x = x
+
+        def func_model_none(
+            req: MyRequest, none_model: int = ModelFieldInject(model=None, field="x")
+        ) -> int:
+            return req.x + none_model
+
+        def extract_request_model(
+            args: List[VarTypeInfo], ctx: Mapping[Union[str, type], Any]
+        ) -> List[VarTypeInfo]:
+
+            req_type = [btype for btype in ctx.keys() if issubclass(btype, MyRequest)]
+            for arg in args:
+                instance = arg.getinstance(ModelFieldInject)
+                if instance is not None and instance.model is None:
+                    instance.model = req_type[0]
+            return args
+
+        ctx = {MyRequest: MyRequest(x=2)}
+        func = await inject_args(
+            func_model_none,
+            ctx,
+            allow_incomplete=False,
+            transform_func_args=extract_request_model,
+        )
+        self.assertEqual(func(), 4)
 
 
-def test_inject_by_name() -> None:
-    ctx: dict[Union[str, type], Any] = {
-        "a": "hello",
-        "b": "world",
-        "c": 123,
-        "e": "foobar",
-        "h": 0.1,
-    }
-    injected = inject_args(injfunc, ctx)
-    assert isinstance(injected, partial)
-    res = injected()
-    assert res == ("hello", "world", 123, 44, "foobar", 3.14, True, 0.1)
-
-
-def test_inject_by_type() -> None:
-    ctx: dict[Union[str, type], Any] = {
-        str: "typed!",
-        int: 43,
-        MyModel: 100,
-        MyModelField: MyModelField(e="foobar", f=2.2),
-    }
-    injected = inject_args(injfunc, ctx)
-    res = injected(a="X")
-    assert res == ("X", "typed!", 100, 43, "foobar", 3.14, True, 2.2)
-
-
-def test_inject_default_used() -> None:
-    ctx = {"a": "A", "c": 100, "e": "hello", "h": 0.12}  # 'b' and 'd' will be  default
-    injected = inject_args(injfunc, ctx)
-    assert injected() == (
-        "A",
-        "abc",  # default
-        100,
-        44,  # default
-        "hello",
-        3.14,
-        True,
-        0.12,
-    )
-
-
-def test_inject_changed_func() -> None:
-    deps = get_func_args(injfunc)
-    ctx = {"a": "foobar", "b": "helloworld"}
-    resolfunc = inject_args(func=injfunc, context=ctx, allow_incomplete=True)
-    args = get_func_args(resolfunc)
-    assert args != deps
-
-
-def test_inject_chained() -> None:
-    deps = get_func_args(injfunc)
-    ctx = {"a": "foobar"}
-    resolfunc = inject_args(injfunc, ctx, True)
-    args = get_func_args(resolfunc)
-    assert args != deps
-
-    ctx2 = {"c": 2}
-    resolfunc2 = inject_args(resolfunc, ctx2, True)
-    args2 = get_func_args(resolfunc2)
-    assert args != args2
-
-
-def test_inject_name_over_type() -> None:
-    ctx = {
-        "b": "by_name",
-        str: "by_type",  # deveria ignorar, pois 'b' está por nome
-        "a": "ok",
-        "c": 1,
-        "e": "x",
-        "h": 0.0,
-    }
-    injected = inject_args(injfunc, ctx, [MyModel])
-    res = injected()
-    assert res[1] == "by_name"  # name should have preference
-
-
-def test_annotated_multiple_extras() -> None:
-    def func(a: Annotated[int, No42(44), NoValidation()]) -> int:
-        return a
-
-    args = get_func_args(func)
-    arg = args[0]
-    assert isinstance(arg.getinstance(ArgsInjectable), No42)
-    assert isinstance(arg.getinstance(NoValidation), NoValidation)
-
-
-def test_missing_required_arg() -> None:
-    def func(a: Annotated[str, ArgsInjectable(...)]) -> str:
-        return a
-
-    with pytest.raises(UnresolvedInjectableError):
-        inject_args(func, {}, False)
-
-
-# ---------- TESTES NOVOS: ModelMethodInject ----------
-
-
-def test_model_method_inject_basic() -> None:
-    ctx = {"x": "test_input", MyModelMethod: MyModelMethod(prefix="basic")}
-    injected = inject_args(injfunc_method, ctx)
-    res = injected()
-    assert res == ("test_input", "basic_value", "basic_other")
-
-
-def test_model_method_inject_name_overrides() -> None:
-    ctx = {
-        "x": "override_test",
-        "y": "by_name_y",
-        "z": "by_name_z",
-        MyModelMethod: MyModelMethod(prefix="should_not_use"),
-    }
-    injected = inject_args(injfunc_method, ctx)
-    res = injected()
-    assert res == ("override_test", "by_name_y", "by_name_z")
-
-
-def test_model_method_inject_missing_model() -> None:
-    ctx = {
-        "x": "fail_case"
-        # MyModelMethod está faltando
-    }
-    with pytest.raises(UnresolvedInjectableError):
-        inject_args(injfunc_method, ctx, allow_incomplete=False)
+if __name__ == "__main__":
+    unittest.main()

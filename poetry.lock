@@ -1027,6 +1027,20 @@ urllib3 = ">=1.26.0"
 keyring = ["keyring (>=15.1)"]
 
 [[package]]
+name = "typemapping"
+version = "0.1.1"
+description = ""
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "typemapping-0.1.1-py3-none-any.whl", hash = "sha256:e0bbb26a64736109370d4f3d0539dadd0ad6d25cc5d35796638aaba85f814695"},
+    {file = "typemapping-0.1.1.tar.gz", hash = "sha256:4046f14d4cef175cb13e6ccd74863d6b449b29a7adeecad6b0c38976ba48e6d7"},
+]
+
+[package.dependencies]
+typing-extensions = ">=4.13.2"
+
+[[package]]
 name = "types-python-dateutil"
 version = "2.9.0.20241206"
 description = "Typing stubs for python-dateutil"
@@ -1088,4 +1102,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "2ba27d3b797d1ea423540c56988e83b7f500e86310fffc87d283a0f5a06af6b3"
+content-hash = "ee3099b5902d49b24f024f4a51ee55eb9b297ce8fae6863e00f72fd78fe96f83"

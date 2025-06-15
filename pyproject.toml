@@ -12,6 +12,7 @@ keywords = ["dependency injection"]
 python = "^3.12"
 python-dateutil = "^2.9.0.post0"
 typing-extensions = "^4.13.2"
+typemapping = "^0.1.1"
 
 
 [tool.poetry.group.dev.dependencies]

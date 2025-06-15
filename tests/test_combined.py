@@ -1,15 +1,9 @@
+import unittest
 from dataclasses import dataclass
 
-import pytest
+from ctxinject.inject import UnresolvedInjectableError, inject_args
+from ctxinject.model import ArgsInjectable, DependsInject, ModelFieldInject
 
-from ctxinject.inject import resolve
-from ctxinject.model import (
-    ArgsInjectable,
-    DependsInject,
-    ModelFieldInject,
-)
-
-from ctxinject.exceptions import UnresolvedInjectableError
 
 class User(str): ...
 
@@ -20,60 +14,51 @@ class Settings:
     timeout: int
 
 
-# Função no segundo nível de dependência
 def sub_dep(
-    uid: int = ArgsInjectable(...),  # resolve por nome
-    timeout: int = ModelFieldInject(
-        Settings, field="timeout"
-    ),  # resolve por model.field
+    uid: int = ArgsInjectable(...),
+    timeout: int = ModelFieldInject(Settings, field="timeout"),
 ) -> str:
     return f"{uid}-{timeout}"
 
 
-# Função no primeiro nível de dependência
 def mid_dep(
-    name: User,  # resolve por tipo
-    uid: int = DependsInject(sub_dep),  # resolve via Depends
-    debug: bool = DependsInject(lambda debug: not debug),  #  resolve por nome
+    name: User,
+    uid: int = DependsInject(sub_dep),
+    debug: bool = DependsInject(lambda debug: not debug),
 ) -> str:
     return f"{name}-{uid}-{debug}"
 
 
-# Handler principal, com múltiplas fontes de contexto
 async def handler(
-    name: User,  # por tipo
-    id: int = ArgsInjectable(),  # por nome
-    to: int = ModelFieldInject(Settings, field="timeout"),  # por model + field fallback
-    combined: str = DependsInject(mid_dep),  # nível 1
-    extra: str = DependsInject(lambda: "static"),  # independente do contexto
+    name: User,
+    id: int = ArgsInjectable(),
+    to: int = ModelFieldInject(Settings, field="timeout"),
+    combined: str = DependsInject(mid_dep),
+    extra: str = DependsInject(lambda: "static"),
 ) -> str:
     return f"{name}|{id}|{to}|{combined}|{extra}"
 
 
-@pytest.mark.asyncio
-async def test_mixed_injectables() -> None:
-    # Contexto fornecido
-    context = {
-        "id": 42,  # para ArgsInjectable
-        "uid": 99,
-        "debug": False,
-        User: "Alice",  # para name (por tipo)
-        Settings: Settings(debug=True, timeout=30),  # para ModelFieldInject e debug
-    }
+class TestCombinedInject(unittest.IsolatedAsyncioTestCase):
 
-    result = await resolve(handler, context=context, overrides={})
-    assert result == "Alice|42|30|Alice-99-False|static"
+    async def test_mixed_injectables(self) -> None:
+        context = {
+            "id": 42,
+            "uid": 99,
+            "debug": False,
+            User: "Alice",
+            Settings: Settings(debug=True, timeout=30),
+        }
+        resolved_func = await inject_args(handler, context, False)
+        result = await resolved_func()
+        self.assertEqual(result, "Alice|42|30|Alice-99-30-True|static")
 
-
-@pytest.mark.asyncio
-async def test_mixed_injectables_missing_ctx() -> None:
-    # Contexto fornecido
-    context = {
-        "id": 42,  # para ArgsInjectable
-        "debug": False,
-        User: "Alice",  # para name (por tipo)
-        Settings: Settings(debug=True, timeout=30),  # para ModelFieldInject e debug
-    }
-
-    with pytest.raises(UnresolvedInjectableError):
-        await resolve(handler, context=context, overrides={})
+    async def test_mixed_injectables_missing_ctx(self) -> None:
+        context = {
+            "id": 42,
+            "debug": False,
+            User: "Alice",
+            Settings: Settings(debug=True, timeout=30),
+        }
+        with self.assertRaises(UnresolvedInjectableError):
+            await inject_args(handler, context, allow_incomplete=False)

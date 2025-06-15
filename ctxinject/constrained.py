@@ -17,7 +17,6 @@ from uuid import UUID
 
 from dateutil.parser import parse
 
-from ctxinject.exceptions import ValidationError
 
 def ConstrainedStr(
     value: str,
@@ -26,15 +25,13 @@ def ConstrainedStr(
     pattern: Optional[str] = None,
     **_: Any,
 ) -> str:
-    # if not isinstance(value, str):  # type: ignore
-    # raise ValidationError("Value must be a string")
     if min_length is not None and not (min_length <= len(value)):
-        raise ValidationError(f"String length must be minimun {min_length}")
+        raise ValueError(f"String length must be minimun {min_length}")
     if max_length is not None and not (len(value) <= max_length):
-        raise ValidationError(f"String length must be maximun {max_length}")
+        raise ValueError(f"String length must be maximun {max_length}")
 
     if pattern and not re.match(pattern, value):
-        raise ValidationError(f"String does not match pattern: {pattern}")
+        raise ValueError(f"String does not match pattern: {pattern}")
 
     return value
 
@@ -49,18 +46,18 @@ def ConstrainedNumber(
     **_: Any,
 ) -> Union[int, float]:
     # if not isinstance(value, int) and not isinstance(value, float):  # type: ignore
-    # raise ValidationError("Value must be an integer or float")
+    # raise ValueError("Value must be an integer or float")
 
     if gt is not None and not value > gt:
-        raise ValidationError(f"Value must be > {gt}")
+        raise ValueError(f"Value must be > {gt}")
     if ge is not None and not value >= ge:
-        raise ValidationError(f"Value must be >= {ge}")
+        raise ValueError(f"Value must be >= {ge}")
     if lt is not None and not value < lt:
-        raise ValidationError(f"Value must be < {lt}")
+        raise ValueError(f"Value must be < {lt}")
     if le is not None and not value <= le:
-        raise ValidationError(f"Value must be <= {le}")
+        raise ValueError(f"Value must be <= {le}")
     if multiple_of is not None and value % multiple_of != 0:
-        raise ValidationError(f"Value must be a multiple of {multiple_of}")
+        raise ValueError(f"Value must be a multiple of {multiple_of}")
 
     return value
 
@@ -74,12 +71,12 @@ def ConstrainedItems(
     **kwargs: Any,
 ) -> list[Any]:
     # if not isinstance(value, list) and not isinstance(value, tuple) and not isinstance(value, set):  # type: ignore
-    # raise ValidationError("Value must be a List, Tuple or Set")
+    # raise ValueError("Value must be a List, Tuple or Set")
 
     if min_items is not None and len(value) < min_items:
-        raise ValidationError(...)
+        raise ValueError(...)
     if max_items is not None and len(value) > max_items:
-        raise ValidationError(...)
+        raise ValueError(...)
 
     v = value
     if isinstance(value, dict):
@@ -115,7 +112,7 @@ def ConstrainedDatetime(
         return dt
 
     except Exception:
-        raise ValidationError(
+        raise ValueError(
             f'Arg value should be a valid datetime string. Found "{value}"'
         )
 
@@ -124,14 +121,12 @@ def ConstrainedUUID(value: str, **_: Any) -> UUID:
     try:
         return UUID(value)
     except Exception:
-        raise ValidationError(
-            f'Arg value should be a valid UUID string. Found "{value}"'
-        )
+        raise ValueError(f'Arg value should be a valid UUID string. Found "{value}"')
 
 
 def ConstrainedEnum(value: Any, baseenum: type[Enum], **_: Any) -> Enum:
     if not isinstance(value, baseenum):
-        raise ValidationError(
+        raise ValueError(
             f'Arg should be of type "{baseenum}", but "{type(value)}" was found'
         )
 
