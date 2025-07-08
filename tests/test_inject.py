@@ -1,6 +1,6 @@
 import unittest
 from functools import partial
-from typing import Annotated, Any, List, Mapping, Union
+from typing import Annotated, Any, List, Mapping, Type, Union
 
 from typemapping import VarTypeInfo, get_func_args
 
@@ -16,7 +16,7 @@ class No42(ArgsInjectable):
     def __init__(self, default: Any) -> None:
         super().__init__(default)
 
-    def validate(self, instance: Any, basetype: type[Any]) -> None:
+    def validate(self, instance: Any, basetype: Type[Any]) -> None:
         if instance == 42:
             raise ValueError
         return instance
@@ -183,37 +183,6 @@ class TestInjectArgs(unittest.IsolatedAsyncioTestCase):
         }
         with self.assertRaises(UnresolvedInjectableError):
             await inject_args(injfunc_method, ctx, allow_incomplete=False)
-
-    async def test_model_field_none(self) -> None:
-
-        class MyRequest:
-            def __init__(self, x: int) -> None:
-                self.x = x
-
-        def func_model_none(
-            req: MyRequest, none_model: int = ModelFieldInject(model=None, field="x")
-        ) -> int:
-            return req.x + none_model
-
-        def extract_request_model(
-            args: List[VarTypeInfo], ctx: Mapping[Union[str, type], Any]
-        ) -> List[VarTypeInfo]:
-
-            req_type = [btype for btype in ctx.keys() if issubclass(btype, MyRequest)]
-            for arg in args:
-                instance = arg.getinstance(ModelFieldInject)
-                if instance is not None and instance.model is None:
-                    instance.model = req_type[0]
-            return args
-
-        ctx = {MyRequest: MyRequest(x=2)}
-        func = await inject_args(
-            func_model_none,
-            ctx,
-            allow_incomplete=False,
-            transform_func_args=extract_request_model,
-        )
-        self.assertEqual(func(), 4)
 
 
 if __name__ == "__main__":

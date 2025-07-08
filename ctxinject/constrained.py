@@ -6,16 +6,18 @@ from typing import (
     Annotated,
     Any,
     Callable,
+    List,
     Mapping,
     Optional,
     Sequence,
+    Type,
     Union,
     get_args,
     get_origin,
 )
 from uuid import UUID
 
-from dateutil.parser import parse
+from dateutil.parser import parse as parsedate
 
 
 def ConstrainedStr(
@@ -47,7 +49,6 @@ def ConstrainedNumber(
 ) -> Union[int, float]:
     # if not isinstance(value, int) and not isinstance(value, float):  # type: ignore
     # raise ValueError("Value must be an integer or float")
-
     if gt is not None and not value > gt:
         raise ValueError(f"Value must be > {gt}")
     if ge is not None and not value >= ge:
@@ -64,12 +65,12 @@ def ConstrainedNumber(
 
 def ConstrainedItems(
     value: Sequence[Any],
-    basetype: tuple[type[Any], ...],
+    basetype: tuple[Type[Any], ...],
     values_check: Optional[Mapping[str, Any]] = None,
     min_items: Optional[int] = None,
     max_items: Optional[int] = None,
     **kwargs: Any,
-) -> list[Any]:
+) -> List[Any]:
     # if not isinstance(value, list) and not isinstance(value, tuple) and not isinstance(value, set):  # type: ignore
     # raise ValueError("Value must be a List, Tuple or Set")
 
@@ -95,7 +96,9 @@ def ConstrainedItems(
 
 def ConstrainedDatetime(
     value: str,
-    which: type[Any] = datetime,
+    from_: Optional[Union[datetime, date, time]] = None,
+    to_: Optional[Union[datetime, date, time]] = None,
+    which: Union[Union[datetime, date, time], date, time] = datetime,
     fmt: Optional[str] = None,
     **_: Any,
 ) -> Union[datetime, date, time]:
@@ -103,17 +106,23 @@ def ConstrainedDatetime(
         if fmt is not None:
             dt: datetime = datetime.strptime(value, fmt)
         else:
-            dt = parse(value)
+            dt = parsedate(value)
 
         if which == date:
-            return dt.date()
-        if which == time:
-            return dt.time()
+            dt = dt.date()
+        elif which == time:
+            dt = dt.time()
+
+        if from_ is not None and dt < from_:
+            raise ValueError(...)
+        if to_ is not None and dt > to_:
+            raise ValueError(...)
+
         return dt
 
-    except Exception:
+    except (ValueError, TypeError) as e:
         raise ValueError(
-            f'Arg value should be a valid datetime string. Found "{value}"'
+            f'Arg value should be a valid datetime string. Found "{value}" \n {e}'
         )
 
 
@@ -124,7 +133,7 @@ def ConstrainedUUID(value: str, **_: Any) -> UUID:
         raise ValueError(f'Arg value should be a valid UUID string. Found "{value}"')
 
 
-def ConstrainedEnum(value: Any, baseenum: type[Enum], **_: Any) -> Enum:
+def ConstrainedEnum(value: Any, baseenum: Type[Enum], **_: Any) -> Enum:
     if not isinstance(value, baseenum):
         raise ValueError(
             f'Arg should be of type "{baseenum}", but "{type(value)}" was found'
@@ -133,7 +142,7 @@ def ConstrainedEnum(value: Any, baseenum: type[Enum], **_: Any) -> Enum:
     return value
 
 
-def constrained_factory(basetype: type[Any]) -> Callable[..., Any]:
+def constrained_factory(basetype: Type[Any]) -> Callable[..., Any]:
     if isinstance(basetype, type):  # type: ignore
         if issubclass(basetype, str):
             return ConstrainedStr

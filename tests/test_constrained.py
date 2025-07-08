@@ -192,8 +192,16 @@ class TestConstrained(unittest.IsolatedAsyncioTestCase):
             ConstrainedItems((1, 2, 3, 4), [int], max_items=3)
 
     def test_constrained_datetime_custom_format(self) -> None:
+        may_1_24 = "2024-05-01"
+        self.assertEqual(ConstrainedDatetime(may_1_24), datetime(2024, 5, 1))
         self.assertEqual(
-            ConstrainedDatetime("2024-05-01", fmt="%Y-%m-%d"), datetime(2024, 5, 1)
+            ConstrainedDatetime(may_1_24, fmt="%Y-%m-%d"), datetime(2024, 5, 1)
         )
         with self.assertRaises(ValueError):
             ConstrainedDatetime("01/05/2024", fmt="%Y-%m-%d")
+
+        with self.assertRaises(ValueError):
+            ConstrainedDatetime("01/05/2024", from_=datetime(2025, 1, 1))
+
+        with self.assertRaises(ValueError):
+            ConstrainedDatetime("01/05/2024", to_=datetime(2023, 1, 1))

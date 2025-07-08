@@ -1,30 +1,40 @@
-from typing import Any, Callable, Optional, Protocol, TypeVar, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Type, TypeVar, runtime_checkable
 
 
 @runtime_checkable
 class Iinjectable(Protocol):
     @property
     def default(self) -> Any: ...
-    def validate(self, instance: Any, basetype: type[Any]) -> Any: ...
+    def validate(self, instance: Any, basetype: Type[Any]) -> Any: ...
 
 
 class ICallableInjectable(Iinjectable, Protocol):
     @property
-    def default(self) -> Callable[..., Any]:  # Espera um Callable como default
-        ...
+    def default(self) -> Callable[..., Any]: ...
 
 
 class Injectable(Iinjectable):
-    def __init__(self, default: Any = ..., **meta: Any):
+    def __init__(
+        self,
+        default: Any = ...,
+        validator: Optional[Callable[..., Any]] = None,
+        **meta: Any,
+    ):
         self._default = default
+        self._validator = validator
         self.meta = meta
 
     @property
     def default(self) -> Any:
         return self._default
 
-    def validate(self, instance: Any, basetype: type[Any]) -> Any:
-        return instance
+    @property
+    def has_validate(self) -> bool:
+        return self._validator is not None
+
+    def validate(self, instance: Any, basetype: Type[Any]) -> Any:
+        self.meta["basetype"] = basetype
+        return self._validator(instance, **self.meta)
 
 
 class ArgsInjectable(Injectable):
@@ -34,11 +44,12 @@ class ArgsInjectable(Injectable):
 class ModelFieldInject(ArgsInjectable):
     def __init__(
         self,
-        model: type[Any],
+        model: Type[Any],
         field: Optional[str] = None,
+        validator: Optional[Callable[..., Any]] = None,
         **meta: Any,
     ):
-        super().__init__(..., **meta)
+        super().__init__(default=..., validator=validator, **meta)
         self.model = model
         self.field = field
 
@@ -67,17 +78,19 @@ class ConstrArgInject(ArgsInjectable):
         self,
         constrained_factory: ConstrainedFactory,
         default: Any = ...,
-        custom_validator: Optional[Callable[[Any], Any]] = None,
+        validator: Optional[Callable[..., Any]] = None,
         **meta: Any,
     ):
-        self._default = default
-        self.meta = meta
-        self._custom_validator = custom_validator
+        super().__init__(default, validator, **meta)
         self._constrained_factory = constrained_factory
 
-    def validate(self, instance: Any, basetype: type[Any]) -> None:
-        if self._custom_validator is not None:
-            instance = self._custom_validator(instance)
+    @property
+    def has_validate(self) -> bool:
+        return True
+
+    def validate(self, instance: Any, basetype: Type[Any]) -> Any:
+        if self._validator is not None:
+            instance = self._validator(instance, **self.meta)
         constr = self._constrained_factory(basetype)
         value = constr(instance, **self.meta)
         return value

@@ -1,194 +1,180 @@
+import json
+from datetime import date, datetime, time
 from typing import (
-    Annotated,
     Any,
     Callable,
-    Iterable,
+    Dict,
     List,
     Optional,
-    Sequence,
-    get_args,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
     get_origin,
-    get_type_hints,
 )
+from uuid import UUID
 
-from typemapping import VarTypeInfo, get_field_type, get_func_args
+import orjson
+from typemapping import get_field_type, get_func_args
 
-from ctxinject.model import DependsInject, Injectable, ModelFieldInject
-
-
-def error_msg(argname: str, msg: str) -> str:
-    return f'Argument "{argname}" error: {msg}'
-
-
-def check_all_typed(
-    args: List[VarTypeInfo],
-) -> List[str]:
-    errors: List[str] = []
-    for arg in args[:]:
-        if arg.basetype is None:
-            errors.append(error_msg(arg.name, "has no type definition"))
-            args.remove(arg)
-    return errors
+from ctxinject.constrained import (
+    ConstrainedDatetime,
+    ConstrainedNumber,
+    ConstrainedStr,
+    ConstrainedUUID,
+)
+from ctxinject.model import ModelFieldInject
 
 
-def check_all_injectables(
-    args: List[VarTypeInfo],
-    modeltype: Iterable[type[Any]],
-    generictype: Optional[type[Any]] = None,
-) -> List[str]:
+def constrained_str(value: str, **kwargs: Any) -> str:
 
-    def is_injectable(arg: VarTypeInfo, modeltype: Iterable[type[Any]]) -> bool:
-        if arg.hasinstance(Injectable):
-            return True
-        for model in modeltype:
-            if arg.istype(model):
-                return True
-            elif generictype is not None and arg.origin is generictype:
-                if (
-                    len(arg.args) > 0
-                    and isinstance(arg.args[0], type)
-                    and issubclass(arg.args[0], model)
-                ):
-                    return True
-        return False
+    min_length = kwargs.get("min_length", None)
+    max_length = kwargs.get("max_length", None)
+    pattern = kwargs.get("pattern", None)
 
-    errors: List[str] = []
-    for arg in args[:]:
-        if not is_injectable(arg, modeltype):
-            errors.append(
-                error_msg(arg.name, f"of type '{arg.basetype}' cannot be injected.")
-            )
-            args.remove(arg)
-    return errors
+    return ConstrainedStr(value, min_length, max_length, pattern)
 
 
-def check_modefield_types(
-    args: List[VarTypeInfo],
-    allowed_models: Optional[List[type[Any]]] = None,
-) -> List[str]:
-    errors: List[str] = []
-    for arg in args[:]:
-        modelfield_inj = arg.getinstance(ModelFieldInject)
-        if modelfield_inj is not None:
-            if not isinstance(modelfield_inj.model, type):  # type: ignore
-                errors.append(
-                    error_msg(
-                        arg.name,
-                        f'ModelFieldInject "model" field should be a type, but "{modelfield_inj.model}" was found',
-                    )
-                )
-                args.remove(arg)
-                continue
-            fieldname = modelfield_inj.field or arg.name
-            argtype = get_field_type(modelfield_inj.model, fieldname)
-            if argtype is None or not arg.istype(argtype):
-                errors.append(
-                    error_msg(
-                        arg.name,
-                        f"has ModelFieldInject, but types does not match. Expected {argtype}, but found {arg.argtype}",
-                    )
-                )
-                args.remove(arg)
-                continue
-            if allowed_models is not None:
-                if len(allowed_models) == 0 or not any(
-                    [
-                        issubclass(modelfield_inj.model, model)
-                        for model in allowed_models
-                    ]
-                ):
-                    errors.append(
-                        error_msg(
-                            arg.name,
-                            f"has ModelFieldInject but type is not allowed. Allowed: {[model.__name__ for model in allowed_models]}, Found: {arg.argtype}",
-                        )
-                    )
-                    args.remove(arg)
-    return errors
+def constrained_num(value: Union[int, float], **kwargs: Any) -> Union[int, float]:
+
+    gt = kwargs.get("gt", None)
+    ge = kwargs.get("ge", None)
+    lt = kwargs.get("lt", None)
+    le = kwargs.get("le", None)
+    multiple_of = kwargs.get("multiple_of", None)
+
+    return ConstrainedNumber(value, gt, ge, lt, le, multiple_of)
 
 
-def check_depends_types(
-    args: Sequence[VarTypeInfo], tgttype: type[DependsInject] = DependsInject
-) -> List[str]:
+def constrained_list(
+    value: List[Any],
+    **kwargs: Any,
+) -> List[Any]:
 
-    errors: List[str] = []
-    deps: list[tuple[str, Optional[type[Any]], Any]] = [
-        (arg.name, arg.basetype, arg.getinstance(tgttype).default)  # type: ignore
-        for arg in args
-        if arg.hasinstance(tgttype)
-    ]
-    for arg_name, dep_type, dep_func in deps:
+    min_items = kwargs.get("min_items", None)
+    max_items = kwargs.get("max_items", None)
 
-        if not callable(dep_func):
-            errors.append(
-                error_msg(
-                    arg_name, f"Depends value should be a callable. Found '{dep_func}'."
-                )
-            )
+    if min_items is not None and len(value) < min_items:
+        raise ValueError(...)
+    if max_items is not None and len(value) > max_items:
+        raise ValueError(...)
+    return value
+
+
+def constrained_dict(
+    value: Dict[Any, Any],
+    **kwargs: Any,
+) -> Dict[Any, Any]:
+
+    constrained_list(list(value.values()), **kwargs)
+
+    return value
+
+
+def _constrained_datetime(
+    value: str,
+    which: Union[datetime, date, time],
+    **kwargs: Any,
+) -> Union[datetime, date, time]:
+
+    fmt = kwargs.get("fmt", None)
+    from_ = kwargs.get("from_", None)
+    to_ = kwargs.get("to_", None)
+    return ConstrainedDatetime(value, from_, to_, which, fmt)
+
+
+def constrained_date(
+    value: str,
+    **kwargs: Any,
+) -> date:
+    return _constrained_datetime(value, date, **kwargs)
+
+
+def constrained_time(
+    value: str,
+    **kwargs: Any,
+) -> time:
+    return _constrained_datetime(value, time, **kwargs)
+
+
+def constrained_datetime(
+    value: str,
+    **kwargs: Any,
+) -> datetime:
+    return _constrained_datetime(value, datetime, **kwargs)
+
+
+def constrained_uuid(
+    value: str,
+    **kwargs: Any,
+) -> UUID:
+    return ConstrainedUUID(value, **kwargs)
+
+
+def constrained_json(
+    value: str,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    # try:
+    return json.loads(value)
+    # except json.JSONDecodeError as e:
+    # raise ValueError(str(e))
+
+
+def constrained_bytejson(
+    value: bytes,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    return orjson.loads(value)
+
+
+arg_proc: Dict[Tuple[type[Any], Type[Any]], Callable[..., Any]] = {
+    (str, str): constrained_str,
+    (int, int): constrained_num,
+    (float, float): constrained_num,
+    (list, list): constrained_list,
+    (dict, dict): constrained_dict,
+    (str, date): constrained_date,
+    (str, time): constrained_time,
+    (str, datetime): constrained_datetime,
+    (str, UUID): constrained_uuid,
+    (str, dict): constrained_json,
+    (bytes, dict): constrained_bytejson,
+}
+
+
+def extract_type(bt: Type[Any]) -> Type[Any]:
+    if not isinstance(bt, type):
+        return get_origin(bt)
+    return bt
+
+
+T = TypeVar("T")
+
+
+def inject_validation(
+    func: Callable[..., Any],
+    argproc: Dict[Tuple[type[Any], Type[Any]], Callable[..., Any]] = arg_proc,
+    extracttype: Callable[[type[T]], Type[T]] = extract_type,
+) -> None:
+
+    args = get_func_args(func)
+
+    for arg in args:
+        instance = arg.getinstance(ModelFieldInject)
+        if instance is None:
+            continue
+        fieldname = instance.field or arg.name
+        modeltype = get_field_type(instance.model, fieldname)
+        argtype = arg.basetype
+
+        if modeltype is None or argtype is None:
             continue
 
-        return_type = get_type_hints(dep_func).get("return")
-        if get_origin(return_type) is Annotated:
-            return_type = get_args(return_type)[0]
-        if return_type is None:
-            errors.append(
-                error_msg(
-                    arg_name,
-                    f"Depends Return should a be type, but {return_type} was found.",
-                )
-            )
-        elif not return_type == dep_type:
-            errors.append(
-                error_msg(
-                    arg_name,
-                    f'Depends function "{dep_func.__name__}" return type should be "{dep_type}", but "{return_type}" was found',
-                )
-            )
-    return errors
+        modeltype = extracttype(modeltype)
+        argtype = extracttype(argtype)
+        validator = argproc.get((modeltype, argtype), None)
+        if validator is not None and instance._validator is None:
+            instance._validator = validator
 
-
-def check_single_injectable(args: List[VarTypeInfo]) -> List[str]:
-
-    errors: List[str] = []
-    for arg in args[:]:
-        if arg.extras is not None:
-            injectables = [x for x in arg.extras if isinstance(x, Injectable)]
-            if len(injectables) > 1:
-                errors.append(
-                    error_msg(
-                        arg.name,
-                        f"has multiple injectables: {[type(i).__name__ for i in injectables]}",
-                    )
-                )
-                args.remove(arg)
-    return errors
-
-
-def func_signature_validation(
-    func: Callable[..., Any],
-    modeltype: List[type[Any]],
-    generictype: Optional[type[Any]] = None,
-    bt_default_fallback: bool = True,
-) -> List[str]:
-
-    args: Sequence[VarTypeInfo] = get_func_args(
-        func, bt_default_fallback=bt_default_fallback
-    )
-    all_errors: List[str] = []
-
-    typed_errors = check_all_typed(args)
-    all_errors.extend(typed_errors)
-
-    inj_errors = check_all_injectables(args, modeltype, generictype)
-    all_errors.extend(inj_errors)
-
-    single_errors = check_single_injectable(args)
-    all_errors.extend(single_errors)
-
-    model_errors = check_modefield_types(args, modeltype)
-    all_errors.extend(model_errors)
-
-    dep_errors = check_depends_types(args)
-    all_errors.extend(dep_errors)
-
-    return all_errors
+        # da pra tentar aqui baseado em subclass

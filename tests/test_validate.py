@@ -1,315 +1,238 @@
+import json
 import unittest
-from collections.abc import AsyncIterator
-from datetime import datetime
-from enum import Enum
-from pathlib import Path
-from typing import Annotated, Any
+from datetime import date, datetime, time
+from typing import Any, Dict, List
 from uuid import UUID
 
+import orjson
 from typemapping import get_func_args
 
-from ctxinject.model import (
-    ArgsInjectable,
-    ConstrArgInject,
-    Depends,
-    DependsInject,
-    Injectable,
-    ModelFieldInject,
-)
-from ctxinject.validate import (
-    check_all_injectables,
-    check_all_typed,
-    check_depends_types,
-    check_modefield_types,
-    check_single_injectable,
-    func_signature_validation,
-)
-
-
-class MyEnum(Enum):
-    VALID = 0
-    INVALID = 1
-
-
-def get_db() -> str:
-    return "sqlite://"
-
-
-def func1(
-    arg1: Annotated[UUID, 123, ConstrArgInject(...)],
-    arg2: Annotated[datetime, ConstrArgInject(...)],
-    dep1: Annotated[str, Depends(get_db)],
-    arg3: str = ConstrArgInject(..., min_length=3),
-    arg4: MyEnum = ConstrArgInject(...),
-    arg5: list[str] = ConstrArgInject(..., max_length=5),
-    dep2: str = Depends(get_db),
-) -> None:
-    return None
-
-
-func1_args = get_func_args(func1)
-
-
-def func2(arg1: str, arg2) -> None:
-    return None
-
-
-def func3(arg1: Annotated[int, Depends(get_db)]) -> None:
-    pass
-
-
-def get_db2() -> None:
-    pass
-
-
-def func4(arg1: Annotated[str, Depends(get_db2)]) -> None:
-    pass
-
-
-def func5(arg: str = Depends(...)) -> str:
-    return ""
-
-
-def dep() -> int:
-    pass
-
-
-def func6(x: str = Depends(dep)) -> None:
-    pass
+from ctxinject.model import ModelFieldInject
+from ctxinject.validate import inject_validation
 
 
 class TestValidation(unittest.TestCase):
+    def setUp(self) -> None:
+        pass
 
-    def test_check_all_typed(self) -> None:
-        errors = check_all_typed(func1_args)
-        self.assertEqual(errors, [])
-        errors = check_all_typed(get_func_args(func2))
-        self.assertEqual(errors, ['Argument "arg2" error: has no type definition'])
-
-    def test_check_all_injectable(self) -> None:
-        errors = check_all_injectables(func1_args, [])
-        self.assertEqual(errors, [])
-
-        class MyPath(Path):
-            pass
-
-        def func2_inner(
-            arg1: Annotated[UUID, 123, ConstrArgInject(...)],
-            arg2: Annotated[datetime, ConstrArgInject(...)],
-            arg3: Path,
-            arg4: MyPath,
-            arg5: AsyncIterator[MyPath],
-            extra: AsyncIterator[Path],
-            argn: datetime = ArgsInjectable(...),
-            dep: Any = DependsInject(get_db),
-        ) -> None:
-            pass
-
-        errors = check_all_injectables(
-            get_func_args(func2_inner), [Path], AsyncIterator
-        )
-        self.assertEqual(errors, [])
-
-        errors = check_all_injectables(get_func_args(func2_inner), [])
-        self.assertEqual(len(errors), 4)
-        self.assertTrue(all(["cannot be injected" in err for err in errors]))
-
-    def test_model_field_ok(self) -> None:
+    def test_validate_str(self) -> None:
         class Model:
-            x: int
-
-            def __init__(self, y: str) -> None:
-                self.y = y
-
-            @property
-            def w(self) -> bool:
-                return True
-
-            def z(self) -> int:
-                return 42
+            x: str
 
         def func(
-            x: int = ModelFieldInject(Model),
-            y: str = ModelFieldInject(Model),
-            z: int = ModelFieldInject(Model),
-            w: bool = ModelFieldInject(Model),
-        ) -> None:
-            pass
-
-        errors = check_modefield_types(get_func_args(func))
-        self.assertEqual(len(errors), 0)
-
-    def test_model_field_type_mismatch(self) -> None:
-        class Model:
-            x: int
-
-        def func(y: Annotated[int, ModelFieldInject(model=Model)]) -> None:
-            pass
-
-        errors = check_modefield_types(get_func_args(func))
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(
-            all(["but types does not match. Expected" in err for err in errors])
-        )
-
-    def test_model_field_not_allowed(self) -> None:
-        class Model:
-            x: int
-
-        def func(x: Annotated[int, ModelFieldInject(model=Model)]) -> None:
-            pass
-
-        errors = check_modefield_types(get_func_args(func), [Model])
-        self.assertEqual(len(errors), 0)
-
-        errors = check_modefield_types(get_func_args(func), [])
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(
-            all(
-                [
-                    "has ModelFieldInject but type is not allowed. Allowed:" in err
-                    for err in errors
-                ]
-            )
-        )
-        errors = check_modefield_types(get_func_args(func), [str, int])
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(
-            all(
-                [
-                    "has ModelFieldInject but type is not allowed. Allowed:" in err
-                    for err in errors
-                ]
-            )
-        )
-
-    def test_invalid_modelfield(self) -> None:
-        def func(a: Annotated[str, ModelFieldInject(model=123)]) -> str:
-            return a
-
-        errors = check_modefield_types(get_func_args(func))
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(all([" field should be a type, but" in err for err in errors]))
-
-    def test_model_field_none(self) -> None:
-
-        def func_model_none(none_model: str = ModelFieldInject(None)) -> None:
-            pass
-
-        errors = check_modefield_types(get_func_args(func_model_none))
-        self.assertEqual(len(errors), 1)
-
-    def test_depends_type(self) -> None:
-        self.assertEqual(len(check_depends_types(func1_args)), 0)
-
-        for f in [func3, func4, func5, func6]:
-            errors = check_depends_types(get_func_args(f))
-            self.assertEqual(len(errors), 1)
-            self.assertTrue(all(["Depends" in err for err in errors]))
-
-    def test_multiple_injectables_error(self) -> None:
-        class MyInject1(ArgsInjectable):
-            pass
-
-        class MyInject2(ArgsInjectable):
-            pass
-
-        def func(x: Annotated[str, MyInject1(...), MyInject2(...)]) -> None:
-            pass
-
-        errors = check_single_injectable(get_func_args(func))
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(all(["has multiple injectables" in err for err in errors]))
-
-    def test_func_signature_validation_success(self) -> None:
-        def valid_func(
-            arg1: Annotated[UUID, 123, ConstrArgInject(...)],
-            arg2: Annotated[datetime, ConstrArgInject(...)],
-            arg3: str = ConstrArgInject(..., min_length=3),
-            arg4: MyEnum = ConstrArgInject(...),
-            arg5: list[str] = ConstrArgInject(..., max_length=5),
-        ) -> None:
-            return None
-
-        # Should pass without exception
-        self.assertEqual(len(func_signature_validation(valid_func, [])), 0)
-
-    def test_func_signature_validation_untyped(self) -> None:
-        def untyped_func(arg1, arg2: int) -> None:
-            pass
-
-        errors = func_signature_validation(untyped_func, [])
-        self.assertEqual(len(errors), 2)
-
-    def test_func_signature_validation_uninjectable(self) -> None:
-        def uninjectable_func(arg1: Path) -> None:
-            pass
-
-        errors = func_signature_validation(uninjectable_func, [])
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(all(["cannot be injected" in err for err in errors]))
-
-    def test_func_signature_validation_invalid_model(self) -> None:
-        def invalid_model_field_func(
-            arg: Annotated[str, ModelFieldInject(model=123)],
-        ) -> None:
-            pass
-
-        errors = func_signature_validation(invalid_model_field_func, [])
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(all([" field should be a type, but" in err for err in errors]))
-
-    def test_func_signature_validation_bad_depends(self) -> None:
-        def get_dep():
-            return "value"
-
-        def bad_dep_func(arg: Annotated[str, Depends(get_dep)]) -> None:
-            pass
-
-        errors = func_signature_validation(bad_dep_func, [])
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(
-            all(["Depends Return should a be type, but " in err for err in errors])
-        )
-
-    def test_func_signature_validation_conflicting_injectables(self) -> None:
-        def bad_multiple_inject_func(
-            arg: Annotated[str, ConstrArgInject(...), ModelFieldInject(model=str)],
-        ) -> None:
-            pass
-
-        errors = func_signature_validation(bad_multiple_inject_func, [])
-        self.assertEqual(len(errors), 1)
-        self.assertTrue(all(["has multiple injectables:" in err for err in errors]))
-
-    def test_multiple_error(self) -> None:
-        class MyType:
-            def __init__(self, x: str) -> None:
-                self.x = x
-
-        def dep1() -> None:
-            pass
-
-        def dep2() -> int:
-            pass
-
-        def multiple_bad(
-            arg1,
-            arg2: str,
-            arg3: Annotated[str, Injectable(), Injectable()],
-            arg4: str = ModelFieldInject(model="foobar"),
-            arg5: bool = ModelFieldInject(model=MyType, field="x"),
-            arg6: Path = ModelFieldInject(model=Path, field="is_dir"),
-            arg7: str = Depends("foobar"),
-            arg8=Depends(dep1),
-            arg9: str = Depends(dep1),
-            arg10: str = Depends(dep2),
+            arg: str = ModelFieldInject(model=Model, field="x", min_length=6)
         ) -> None:
             return
 
-        errors = func_signature_validation(multiple_bad, [], bt_default_fallback=False)
-        self.assertEqual(len(errors), 10)
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(modelinj.validate("helloworld", str), "helloworld")
 
+        with self.assertRaises(ValueError):
+            modelinj.validate("hello", str)
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_validate_int(self) -> None:
+        class Model:
+            x: int
+
+        def func(arg: int = ModelFieldInject(model=Model, field="x", gt=6)) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(modelinj.validate(12, int), 12)
+
+        with self.assertRaises(ValueError):
+            modelinj.validate(4, int)
+
+    def test_validate_float(self) -> None:
+        class Model:
+            x: float
+
+        def func(arg: float = ModelFieldInject(model=Model, field="x", gt=6)) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(modelinj.validate(6.5, basetype=float), 6.5)
+
+        with self.assertRaises(ValueError):
+            modelinj.validate(5.5, basetype=float)
+
+    def test_validate_list(self) -> None:
+        class Model:
+            x: List[str]
+
+        def func(
+            arg: List[str] = ModelFieldInject(model=Model, field="x", max_items=1)
+        ) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(modelinj.validate(["foo"], basetype=list[str]), ["foo"])
+
+        with self.assertRaises(ValueError):
+            modelinj.validate(["foo", "bar"], basetype=list[str])
+
+    def test_validate_dict(self) -> None:
+        class Model:
+            x: Dict[str, str]
+
+        def func(
+            arg: Dict[str, str] = ModelFieldInject(model=Model, field="x", max_items=1)
+        ) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(
+            modelinj.validate({"foo": "bar"}, basetype=Dict[str, str]), {"foo": "bar"}
+        )
+
+        with self.assertRaises(ValueError):
+            modelinj.validate({"foo": "bar", "hello": "world"}, basetype=Dict[str, str])
+
+    def test_validate_date(self) -> None:
+        class Model:
+            x: str
+
+        def func(
+            arg: date = ModelFieldInject(model=Model, field="x", from_=date(2024, 1, 1))
+        ) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(
+            modelinj.validate("2024-06-06", basetype=date), date(2024, 6, 6)
+        )
+
+        with self.assertRaises(ValueError):
+            modelinj.validate("2023-06-06", basetype=date)
+
+    def test_validate_time(self) -> None:
+        class Model:
+            x: str
+
+        def func(
+            arg: time = ModelFieldInject(model=Model, field="x", from_=time(2, 2, 2))
+        ) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(modelinj.validate("03:03:03", basetype=time), time(3, 3, 3))
+
+        with self.assertRaises(ValueError):
+            modelinj.validate("01:01:01", basetype=time)
+
+    def test_validate_datetime(self) -> None:
+        class Model:
+            x: str
+
+        def func(
+            arg: datetime = ModelFieldInject(
+                model=Model, field="x", from_=datetime(2024, 1, 1)
+            )
+        ) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        self.assertEqual(
+            modelinj.validate("2024-06-06", basetype=datetime), datetime(2024, 6, 6)
+        )
+
+        with self.assertRaises(ValueError):
+            modelinj.validate("2023-06-06", basetype=datetime)
+
+    def test_validate_uuid(self) -> None:
+        class Model:
+            x: str
+
+        def func(arg: UUID = ModelFieldInject(model=Model, field="x")) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        modelinj.validate("94fa2f76-84c7-484e-95ee-5fc3fabbd9fb", basetype=UUID)
+        with self.assertRaises(ValueError):
+            modelinj.validate("NONUUID", basetype=UUID)
+
+    def test_validate_json(self) -> None:
+        class Model:
+            x: str
+
+        def func(
+            arg: Dict[str, Any] = ModelFieldInject(
+                model=Model,
+                field="x",
+            )
+        ) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        data = {"foo": "bar"}
+        self.assertEqual(
+            modelinj.validate(json.dumps(data), basetype=Dict[str, Any]), data
+        )
+
+        with self.assertRaises(ValueError):
+            modelinj.validate("no json", basetype=Dict[str, Any])
+
+    def test_validate_bytesjson(self) -> None:
+        class Model:
+            x: bytes
+
+        def func(
+            arg: Dict[str, Any] = ModelFieldInject(
+                model=Model,
+                field="x",
+            )
+        ) -> None:
+            return
+
+        args = get_func_args(func)
+        modelinj = args[0].getinstance(ModelFieldInject)
+        self.assertFalse(modelinj.has_validate)
+        inject_validation(func)
+        self.assertTrue(modelinj.has_validate)
+        data = {"foo": "bar"}
+        self.assertEqual(
+            modelinj.validate(orjson.dumps(data), basetype=Dict[str, Any]), data
+        )
+
+        with self.assertRaises(ValueError):
+            modelinj.validate("no json", basetype=Dict[str, Any])

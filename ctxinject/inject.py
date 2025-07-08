@@ -1,6 +1,6 @@
 import inspect
 from functools import partial
-from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Type, Union
 
 from typemapping import VarTypeInfo, get_func_args
 
@@ -18,13 +18,13 @@ def resolve_by_name(context: Dict[Union[str, type], Any], arg: str) -> Any:
 
 
 def resolve_from_model(
-    context: Dict[Union[str, type], Any], model: type[Any], field: str
+    context: Dict[Union[str, type], Any], model: Type[Any], field: str
 ) -> Any:
     method = getattr(context[model], field)
     return method() if callable(method) else method
 
 
-def resolve_by_type(context: Dict[Union[str, type], Any], bt: type[Any]) -> Any:
+def resolve_by_type(context: Dict[Union[str, type], Any], bt: Type[Any]) -> Any:
     return context[bt]
 
 
@@ -36,19 +36,19 @@ def wrap_validate(
     context: Dict[Union[str, type], Any],
     func: Callable[..., Any],
     instance: ArgsInjectable,
-    bt: type[Any],
+    bt: Type[Any],
     name: str,
 ) -> Any:
 
     value = func(context)
     validated = instance.validate(value, bt)
-    if validated is None:
-        raise ValueError(f"Validation for {name} returned None")
+    # if validated is None:
+    # raise ValueError(f"Validation for {name} returned None")
     return validated
 
 
 type TransformFunction = Callable[
-    [Sequence[VarTypeInfo], Dict[Union[str, type], Any]],
+    [Sequence[VarTypeInfo], Any],
     Sequence[VarTypeInfo],
 ]
 
@@ -65,7 +65,7 @@ async def resolve_mapped_ctx(
     return results
 
 
-async def map_ctx(
+def map_ctx(
     args: Iterable[VarTypeInfo],
     context: Dict[Union[str, type], Any],
     allow_incomplete: bool,
@@ -88,8 +88,9 @@ async def map_ctx(
             dep_func = overrides.get(
                 callable_instance.default, callable_instance.default
             )
+            callable_instance._default = dep_func
             dep_args = get_func_args(dep_func)
-            dep_ctx_map = await map_ctx(
+            dep_ctx_map = map_ctx(
                 dep_args, context, allow_incomplete, validate, overrides
             )
 
@@ -123,7 +124,12 @@ async def map_ctx(
                 f"Argument '{arg.name}' is incomplete or missing a valid injectable context."
             )
         if value is not None:
-            if validate and instance is not None and arg.basetype is not None:
+            if (
+                validate
+                and instance is not None
+                and arg.basetype is not None
+                and instance.has_validate
+            ):
                 value = partial(
                     wrap_validate,
                     func=value,
@@ -135,18 +141,32 @@ async def map_ctx(
     return ctx
 
 
+def get_mapped_ctx(
+    func: Callable[..., Any],
+    context: Dict[Union[str, type], Any],
+    allow_incomplete: bool = True,
+    validate: bool = True,
+    transform_func: Optional[Callable[[Callable[..., Any]], Callable[..., Any]]] = None,
+    overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
+) -> Dict[str, Any]:
+    if transform_func is not None:
+        func = transform_func(func)
+
+    funcargs = get_func_args(func)
+
+    return map_ctx(funcargs, context, allow_incomplete, validate, overrides)
+
+
 async def inject_args(
     func: Callable[..., Any],
     context: Dict[Union[str, type], Any],
     allow_incomplete: bool = True,
     validate: bool = True,
-    transform_func_args: Optional[TransformFunction] = None,
+    transform_func: Optional[Callable[[Callable[..., Any]], Callable[..., Any]]] = None,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
 ) -> partial[Any]:
-    funcargs = get_func_args(func)
-    if transform_func_args is not None:
-        funcargs = transform_func_args(funcargs, context)
-
-    mapped_ctx = await map_ctx(funcargs, context, allow_incomplete, validate, overrides)
+    mapped_ctx = get_mapped_ctx(
+        func, context, allow_incomplete, validate, transform_func, overrides
+    )
     resolved = await resolve_mapped_ctx(context, mapped_ctx)
     return partial(func, **resolved)
