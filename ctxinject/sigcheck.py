@@ -82,27 +82,7 @@ def check_modefield_types(
                 )
                 args.remove(arg)
                 continue
-            fieldname = modelfield_inj.field or arg.name
-            argtype = get_field_type(modelfield_inj.model, fieldname)
-            if argtype is None:
-                errors.append(
-                    error_msg(
-                        arg.name,
-                        f"Could not determine type of class '{modelfield_inj.model}', field '{fieldname}' ",
-                    )
-                )
-                args.remove(arg)
-                continue
-            elif not arg.isequal(argtype):
-                if (argtype, arg.basetype) not in type_cast:
-                    errors.append(
-                        error_msg(
-                            arg.name,
-                            f"has ModelFieldInject, but types does not match. Expected {argtype}, but found {arg.argtype}",
-                        )
-                    )
-                    args.remove(arg)
-                    continue
+
             if allowed_models is not None:
                 if len(allowed_models) == 0 or not any(
                     [
@@ -117,6 +97,36 @@ def check_modefield_types(
                         )
                     )
                     args.remove(arg)
+                    continue
+            fieldname = modelfield_inj.field or arg.name
+            argtype = get_field_type(modelfield_inj.model, fieldname)
+
+            if argtype is None:
+                errors.append(
+                    error_msg(
+                        arg.name,
+                        f"Could not determine type of class '{modelfield_inj.model}', field '{fieldname}' ",
+                    )
+                )
+                args.remove(arg)
+                continue
+            if (
+                isinstance(arg.basetype, type)
+                and isinstance(argtype, type)
+                and issubclass(argtype, arg.basetype)
+            ):
+                continue
+            if not arg.istype(argtype):
+                if (argtype, arg.basetype) not in type_cast:
+                    errors.append(
+                        error_msg(
+                            arg.name,
+                            f"has ModelFieldInject, but types does not match. Expected {argtype}, but found {arg.argtype}",
+                        )
+                    )
+                    args.remove(arg)
+                    continue
+
     return errors
 
 

@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Dict as Dict_t
+from typing import Mapping
 from uuid import UUID
 
 from typemapping import get_func_args
@@ -122,10 +123,16 @@ class TestSigCheck(unittest.TestCase):
         self.assertTrue(all(["cannot be injected" in err for err in errors]))
 
     def test_model_field_ok(self) -> None:
+
+        class Base: ...
+
+        class Derived(Base): ...
+
         class Model:
             x: int
             a: List[str]
             b: Dict[str, str]
+            d: Derived
 
             def __init__(self, y: str, c: Enum) -> None:
                 self.y = y
@@ -147,6 +154,8 @@ class TestSigCheck(unittest.TestCase):
             b: Dict[str, str] = ModelFieldInject(Model),
             c: Enum = ModelFieldInject(Model),
             f: Dict_t[str, str] = ModelFieldInject(Model, field="b"),
+            d: Base = ModelFieldInject(Model),
+            h: Derived = ModelFieldInject(Model, field="d"),
         ) -> None:
             pass
 
@@ -162,6 +171,16 @@ class TestSigCheck(unittest.TestCase):
 
             errors = check_modefield_types(get_func_args(func_2))
             self.assertEqual(len(errors), 0)
+
+    def test_model_field_type_error(self) -> None:
+        class Model:
+            x: Dict[str, str]
+
+        def func(x: Annotated[int, ModelFieldInject(model=Model)]) -> None:
+            pass
+
+        errors = check_modefield_types(get_func_args(func))
+        self.assertEqual(len(errors), 1)
 
     def test_model_field_type_mismatch(self) -> None:
         class Model:

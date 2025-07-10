@@ -1,21 +1,20 @@
 import json
 from datetime import date, datetime, time
-from typing import (
+from uuid import UUID
+
+import orjson
+from typemapping import get_field_type, get_func_args
+from typing_extensions import (
     Any,
     Callable,
     Dict,
     List,
-    Optional,
     Tuple,
     Type,
     TypeVar,
     Union,
     get_origin,
 )
-from uuid import UUID
-
-import orjson
-from typemapping import get_field_type, get_func_args
 
 from ctxinject.constrained import (
     ConstrainedDatetime,
@@ -126,6 +125,13 @@ def constrained_bytejson(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     return orjson.loads(value)
+
+
+def return_only(
+    t: Any,
+    **kwargs: Any,
+) -> Any:
+    return t
 
 
 arg_proc: Dict[Tuple[type[Any], Type[Any]], Callable[..., Any]] = {
