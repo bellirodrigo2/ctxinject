@@ -1,4 +1,5 @@
-from typing import (
+from typemapping import VarTypeInfo, get_field_type, get_func_args
+from typing_extensions import (
     Annotated,
     Any,
     Callable,
@@ -12,8 +13,6 @@ from typing import (
     get_origin,
     get_type_hints,
 )
-
-from typemapping import VarTypeInfo, get_field_type, get_func_args
 
 from ctxinject.model import DependsInject, Injectable, ModelFieldInject
 
@@ -85,10 +84,16 @@ def check_modefield_types(
                 continue
             fieldname = modelfield_inj.field or arg.name
             argtype = get_field_type(modelfield_inj.model, fieldname)
-
-            # if argtype is None or not arg.istype(argtype):
-            if argtype is None or arg.basetype != argtype:
-                # ver se pode ser convertido
+            if argtype is None:
+                errors.append(
+                    error_msg(
+                        arg.name,
+                        f"Could not determine type of class '{modelfield_inj.model}', field '{fieldname}' ",
+                    )
+                )
+                args.remove(arg)
+                continue
+            elif not arg.isequal(argtype):
                 if (argtype, arg.basetype) not in type_cast:
                     errors.append(
                         error_msg(

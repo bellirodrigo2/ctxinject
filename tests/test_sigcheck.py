@@ -1,12 +1,14 @@
+import sys
 import unittest
 from collections.abc import AsyncIterator
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Dict as Dict_t
 from uuid import UUID
 
 from typemapping import get_func_args
+from typing_extensions import Annotated, Any, Dict, List
 
 from ctxinject.model import (
     ArgsInjectable,
@@ -24,6 +26,11 @@ from ctxinject.sigcheck import (
     check_single_injectable,
     func_signature_check,
 )
+
+if sys.version_info >= (3, 9):
+    TEST_TYPE = True
+else:
+    TEST_TYPE = False
 
 
 class MyEnum(Enum):
@@ -117,9 +124,12 @@ class TestSigCheck(unittest.TestCase):
     def test_model_field_ok(self) -> None:
         class Model:
             x: int
+            a: List[str]
+            b: Dict[str, str]
 
-            def __init__(self, y: str) -> None:
+            def __init__(self, y: str, c: Enum) -> None:
                 self.y = y
+                self.c = c
 
             @property
             def w(self) -> bool:
@@ -133,11 +143,25 @@ class TestSigCheck(unittest.TestCase):
             y: str = ModelFieldInject(Model),
             z: int = ModelFieldInject(Model),
             w: bool = ModelFieldInject(Model),
+            a: List[str] = ModelFieldInject(Model),
+            b: Dict[str, str] = ModelFieldInject(Model),
+            c: Enum = ModelFieldInject(Model),
+            f: Dict_t[str, str] = ModelFieldInject(Model, field="b"),
         ) -> None:
             pass
 
         errors = check_modefield_types(get_func_args(func))
         self.assertEqual(len(errors), 0)
+
+        if TEST_TYPE:
+
+            def func_2(
+                b: dict[str, str] = ModelFieldInject(Model),
+            ) -> None:
+                pass
+
+            errors = check_modefield_types(get_func_args(func_2))
+            self.assertEqual(len(errors), 0)
 
     def test_model_field_type_mismatch(self) -> None:
         class Model:
@@ -149,7 +173,7 @@ class TestSigCheck(unittest.TestCase):
         errors = check_modefield_types(get_func_args(func))
         self.assertEqual(len(errors), 1)
         self.assertTrue(
-            all(["but types does not match. Expected" in err for err in errors])
+            all(["Could not determine type of class " in err for err in errors])
         )
 
     def test_model_field_not_allowed(self) -> None:

@@ -50,8 +50,12 @@ class ModelFieldInject(ArgsInjectable):
         **meta: Any,
     ):
         super().__init__(default=..., validator=validator, **meta)
-        self.model = model
+        self._model = model
         self.field = field
+
+    @property
+    def model(self) -> Type[Any]:
+        return self._model
 
 
 class CallableInjectable(Injectable, ICallableInjectable):
