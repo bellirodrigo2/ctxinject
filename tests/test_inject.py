@@ -1,8 +1,8 @@
 import unittest
 from functools import partial
-from typing import Annotated, Any, List, Mapping, Type, Union
 
-from typemapping import VarTypeInfo, get_func_args
+from typemapping import get_func_args
+from typing_extensions import Annotated, Any, Type, Union
 
 from ctxinject.inject import UnresolvedInjectableError, inject_args
 from ctxinject.model import ArgsInjectable, Injectable, ModelFieldInject

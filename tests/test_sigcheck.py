@@ -189,11 +189,31 @@ class TestSigCheck(unittest.TestCase):
         def func(y: Annotated[int, ModelFieldInject(model=Model)]) -> None:
             pass
 
-        errors = check_modefield_types(get_func_args(func))
+        errors = check_modefield_types(get_func_args(func), allowed_models=[Model])
         self.assertEqual(len(errors), 1)
         self.assertTrue(
             all(["Could not determine type of class " in err for err in errors])
         )
+
+    def test_model_field_type_instance(self) -> None:
+        class enum1(Enum):
+            foo = 1
+            bar = 2
+
+        e1 = enum1.bar
+        e2 = enum1.bar
+
+        class Model:
+            x: e1
+
+        def func(
+            x: Annotated[e1, ModelFieldInject(model=Model)],
+            y: Annotated[e2, ModelFieldInject(model=Model, field="x")],
+        ) -> None:
+            pass
+
+        errors = check_modefield_types(get_func_args(func))
+        self.assertEqual(len(errors), 0)
 
     def test_model_field_not_allowed(self) -> None:
         class Model:

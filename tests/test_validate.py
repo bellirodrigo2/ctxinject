@@ -113,7 +113,7 @@ class TestValidation(unittest.TestCase):
             x: str
 
         def func(
-            arg: date = ModelFieldInject(model=Model, field="x", from_=date(2024, 1, 1))
+            arg: date = ModelFieldInject(model=Model, field="x", start=date(2024, 1, 1))
         ) -> None:
             return
 
@@ -134,7 +134,7 @@ class TestValidation(unittest.TestCase):
             x: str
 
         def func(
-            arg: time = ModelFieldInject(model=Model, field="x", from_=time(2, 2, 2))
+            arg: time = ModelFieldInject(model=Model, field="x", start=time(2, 2, 2))
         ) -> None:
             return
 
@@ -154,7 +154,7 @@ class TestValidation(unittest.TestCase):
 
         def func(
             arg: datetime = ModelFieldInject(
-                model=Model, field="x", from_=datetime(2024, 1, 1)
+                model=Model, field="x", start=datetime(2024, 1, 1)
             )
         ) -> None:
             return
