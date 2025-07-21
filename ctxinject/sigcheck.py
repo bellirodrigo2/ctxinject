@@ -192,7 +192,7 @@ def func_signature_check(
     modeltype: Optional[List[type[Any]]] = None,
     generictype: Optional[type[Any]] = None,
     bt_default_fallback: bool = True,
-    type_cast: Optional[List[Tuple[type[Any], Type[Any]]]] = None,
+    type_cast: Optional[List[Tuple[Type[Any], Type[Any]]]] = None,
 ) -> List[str]:
 
     modeltype = modeltype or []

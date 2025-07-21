@@ -89,7 +89,7 @@ def ConstrainedItems(
     if isinstance(value, dict) and values_check is not None:
         constrained = constrained_factory(basetype[1])
         for item in value.values():
-            constrained(item, **kwargs)
+            constrained(item, **values_check)
 
     return value
 

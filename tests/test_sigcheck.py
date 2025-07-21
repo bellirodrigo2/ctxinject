@@ -39,7 +39,7 @@ class MyEnum(Enum):
     INVALID = 1
 
 
-def get_db() -> str:
+def get_db() -> Annotated[str, "db_test"]:
     return "sqlite://"
 
 
@@ -51,15 +51,15 @@ def func1(
     arg4: MyEnum = ConstrArgInject(...),
     arg5: list[str] = ConstrArgInject(..., max_length=5),
     dep2: str = Depends(get_db),
-) -> None:
-    return None
+) -> Annotated[str, "foobar"]:
+    return "None"
 
 
 func1_args = get_func_args(func1)
 
 
-def func2(arg1: str, arg2) -> None:
-    return None
+def func2(arg1: str, arg2) -> Annotated[str, "teste"]:
+    return "None"
 
 
 def func3(arg1: Annotated[int, Depends(get_db)]) -> None:
@@ -78,7 +78,7 @@ def func5(arg: str = Depends(...)) -> str:
     return ""
 
 
-def dep() -> int:
+def dep() -> Annotated[int, 123]:
     pass
 
 

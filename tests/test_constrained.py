@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 from enum import Enum
 from functools import partial
-from typing import Annotated, Any
+from typing import Annotated, Any, Dict
 from uuid import UUID
 
 from ctxinject.constrained import (
@@ -61,6 +61,10 @@ class TestConstrained(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             ConstrainedNumber(45, gt=2, lt=10, multiple_of=5)
         with self.assertRaises(ValueError):
+            ConstrainedNumber(45, ge=52)
+        with self.assertRaises(ValueError):
+            ConstrainedNumber(45, le=5)
+        with self.assertRaises(ValueError):
             ConstrainedNumber(45, multiple_of=2)
         with self.assertRaises(ValueError):
             ConstrainedNumber(10.2, gt=2.7, lt=10.09, multiple_of=5.1)
@@ -70,6 +74,8 @@ class TestConstrained(unittest.IsolatedAsyncioTestCase):
             ConstrainedItems([1, 2, 3], [int], gt=3)
         with self.assertRaises(ValueError):
             ConstrainedItems(["1", "2", "3"], [str], min_items=1, max_items=2)
+        with self.assertRaises(ValueError):
+            ConstrainedItems(["1", "2", "3"], [str], min_items=10)
         with self.assertRaises(ValueError):
             ConstrainedItems(["1", "2", "3"], [str], min_length=2)
         with self.assertRaises(ValueError):
@@ -85,6 +91,16 @@ class TestConstrained(unittest.IsolatedAsyncioTestCase):
                 max_items=2,
                 max_length=2,
             )
+        with self.assertRaises(ValueError):
+            ConstrainedItems(
+                {"f": "bar"},
+                [str, str],
+                values_check={"max_length": 2},
+                min_items=0,
+                max_items=2,
+                max_length=2,
+            )
+
         with self.assertRaises(ValueError):
             ConstrainedDatetime("2023-13-02")
         with self.assertRaises(ValueError):
@@ -205,3 +221,13 @@ class TestConstrained(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ValueError):
             ConstrainedDatetime("01/05/2024", to_=datetime(2023, 1, 1))
+
+    def test_custom(self) -> None:
+
+        def validator(instance: Any, **kwrags: Any) -> None:
+            raise ValueError
+
+        arg = ConstrArgInject(constrained_factory, validator=validator)
+
+        with self.assertRaises(ValueError):
+            arg.validate("hello", str)

@@ -55,11 +55,14 @@ class TestValidation(unittest.TestCase):
         class Model:
             x: float
 
-        def func(arg: float = ModelFieldInject(model=Model, field="x", gt=6)) -> None:
+        def func(
+            hello=ModelFieldInject(str),
+            arg: float = ModelFieldInject(model=Model, field="x", gt=6),
+        ) -> None:
             return
 
         args = get_func_args(func)
-        modelinj = args[0].getinstance(ModelFieldInject)
+        modelinj = args[1].getinstance(ModelFieldInject)
         self.assertFalse(modelinj.has_validate)
         inject_validation(func)
         self.assertTrue(modelinj.has_validate)
@@ -73,7 +76,9 @@ class TestValidation(unittest.TestCase):
             x: List[str]
 
         def func(
-            arg: List[str] = ModelFieldInject(model=Model, field="x", max_items=1)
+            arg: List[str] = ModelFieldInject(
+                model=Model, field="x", min_length=1, max_length=2
+            )
         ) -> None:
             return
 
@@ -82,22 +87,33 @@ class TestValidation(unittest.TestCase):
         self.assertFalse(modelinj.has_validate)
         inject_validation(func)
         self.assertTrue(modelinj.has_validate)
-        self.assertEqual(modelinj.validate(["foo"], basetype=list[str]), ["foo"])
+        self.assertEqual(modelinj.validate(["foo"], basetype=List[str]), ["foo"])
 
         with self.assertRaises(ValueError):
-            modelinj.validate(["foo", "bar"], basetype=list[str])
+            modelinj.validate(
+                ["foo", "bar", "hello"],
+                basetype=List[str],
+            )
+        with self.assertRaises(ValueError):
+            modelinj.validate(
+                [],
+                basetype=List[str],
+            )
 
     def test_validate_dict(self) -> None:
         class Model:
             x: Dict[str, str]
 
         def func(
-            arg: Dict[str, str] = ModelFieldInject(model=Model, field="x", max_items=1)
+            arg_zero: str,
+            arg: Dict[str, str] = ModelFieldInject(
+                model=Model, field="x", min_length=1, max_length=2
+            ),
         ) -> None:
             return
 
         args = get_func_args(func)
-        modelinj = args[0].getinstance(ModelFieldInject)
+        modelinj = args[1].getinstance(ModelFieldInject)
         self.assertFalse(modelinj.has_validate)
         inject_validation(func)
         self.assertTrue(modelinj.has_validate)
@@ -106,7 +122,12 @@ class TestValidation(unittest.TestCase):
         )
 
         with self.assertRaises(ValueError):
-            modelinj.validate({"foo": "bar", "hello": "world"}, basetype=Dict[str, str])
+            modelinj.validate(
+                {"foo": "bar", "hello": "world", "a": "b"}, basetype=Dict[str, str]
+            )
+
+        with self.assertRaises(ValueError):
+            modelinj.validate({}, basetype=Dict[str, str])
 
     def test_validate_date(self) -> None:
         class Model:

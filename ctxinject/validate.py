@@ -50,12 +50,12 @@ def constrained_list(
     **kwargs: Any,
 ) -> List[Any]:
 
-    min_items = kwargs.get("min_items", None)
-    max_items = kwargs.get("max_items", None)
+    min_length = kwargs.get("min_length", None)
+    max_length = kwargs.get("max_length", None)
 
-    if min_items is not None and len(value) < min_items:
+    if min_length is not None and len(value) < min_length:
         raise ValueError(...)
-    if max_items is not None and len(value) > max_items:
+    if max_length is not None and len(value) > max_length:
         raise ValueError(...)
     return value
 

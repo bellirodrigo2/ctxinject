@@ -5,12 +5,14 @@ from typing import Any, Callable, Optional, Protocol, Type, TypeVar, runtime_che
 class Iinjectable(Protocol):
     @property
     def default(self) -> Any: ...
-    def validate(self, instance: Any, basetype: Type[Any]) -> Any: ...
+    def validate(
+        self, instance: Any, basetype: Type[Any]
+    ) -> Any: ...  # pragma: no cover
 
 
 class ICallableInjectable(Iinjectable, Protocol):
     @property
-    def default(self) -> Callable[..., Any]: ...
+    def default(self) -> Callable[..., Any]: ...  # pragma: no cover
 
 
 class Injectable(Iinjectable):
@@ -71,7 +73,7 @@ T = TypeVar("T")
 
 
 class Constrained(Protocol[T]):
-    def __call__(self, data: T, **kwargs: object) -> T: ...
+    def __call__(self, data: T, **kwargs: object) -> T: ...  # pragma: no cover
 
 
 ConstrainedFactory = Callable[[type[Any]], Constrained[T]]
