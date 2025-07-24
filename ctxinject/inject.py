@@ -1,7 +1,7 @@
 import asyncio
 import inspect
 from functools import partial
-from typing import Any, Callable, Dict, Iterable, Optional, Type, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Type, Union
 
 from typemapping import VarTypeInfo, get_field_type, get_func_args
 
@@ -60,7 +60,7 @@ def resolve_by_default(context: Dict[Union[str, Type[Any]], Any], default_: Any)
 def wrap_validate_sync(
     context: Dict[Union[str, Type[Any]], Any],
     func: Callable[..., Any],
-    instance: Any,  # ArgsInjectable or CallableInjectable
+    instance: Any,  # Can be ArgsInjectable or CallableInjectable
     bt: Type[Any],
     name: str,
 ) -> Any:
@@ -73,13 +73,13 @@ def wrap_validate_sync(
 async def wrap_validate_async(
     context: Dict[Union[str, Type[Any]], Any],
     func: Callable[..., Any],
-    instance: Any,  # ArgsInjectable or CallableInjectable
+    instance: Any,  # Can be ArgsInjectable or CallableInjectable
     bt: Type[Any],
     name: str,
 ) -> Any:
     """Async validation wrapper - awaits value before validation."""
     value = await func(context)
-    validated = instance.validate(value, bt)  # Validator sempre sync
+    validated = instance.validate(value, bt)  # Validator always sync
     return validated
 
 
@@ -152,13 +152,16 @@ def map_ctx(
         bt = arg.basetype
         value = None
 
-        # resolve depends
+        # resolve dependencies
         if arg.hasinstance(CallableInjectable):
             callable_instance = arg.getinstance(CallableInjectable)
+
+            # Apply override without mutating the original object
             dep_func = overrides.get(
                 callable_instance.default, callable_instance.default
             )
-            callable_instance._default = dep_func
+            # ✅ FIXED: Do NOT mutate callable_instance._default
+
             dep_args = get_func_args(dep_func)
             dep_ctx_map = map_ctx(
                 dep_args, context, allow_incomplete, validate, overrides
@@ -169,7 +172,9 @@ def map_ctx(
                 if inspect.iscoroutinefunction(f):
                     return await f(**sub_kwargs)
                 else:
+                    # f can be a normal function or lambda that returns coroutine
                     result = f(**sub_kwargs)
+                    # Check if the result is a coroutine
                     if inspect.iscoroutine(result):
                         return await result
                     return result
@@ -202,10 +207,11 @@ def map_ctx(
             )
 
         if value is not None:
+            # Check BOTH ArgsInjectable AND CallableInjectable for validation
             args_instance = arg.getinstance(ArgsInjectable)
             callable_instance = arg.getinstance(CallableInjectable)
 
-            # Escolher qual instance usar para validação
+            # Choose which instance to use for validation
             validation_instance = (
                 args_instance if args_instance is not None else callable_instance
             )
