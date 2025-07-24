@@ -6,8 +6,6 @@ mixed injectables, model field injection, and dependency chains in
 realistic usage scenarios.
 """
 
-from typing import Callable
-
 import pytest
 
 from ctxinject.inject import UnresolvedInjectableError, inject_args
@@ -19,7 +17,7 @@ class TestMixedInjectableIntegration:
     """Test complex scenarios mixing different injectable types."""
 
     @pytest.fixture
-    def sub_dependency_function(self) -> Callable[..., str]:
+    def sub_dependency_function(self):
         """Sub-dependency that requires both context and model field injection."""
 
         def sub_dep(
@@ -543,7 +541,7 @@ class TestErrorHandlingIntegration:
 
         context = {IncompleteModel: IncompleteModel()}
 
-        with pytest.raises(AttributeError):
+        with pytest.raises(UnresolvedInjectableError):
             await inject_args(handler, context, allow_incomplete=False)
 
     @pytest.mark.asyncio

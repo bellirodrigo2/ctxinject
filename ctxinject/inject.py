@@ -2,7 +2,7 @@ import inspect
 from functools import partial
 from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Type, Union
 
-from typemapping import VarTypeInfo, get_func_args
+from typemapping import VarTypeInfo, get_field_type, get_func_args
 
 from ctxinject.model import ArgsInjectable, CallableInjectable, ModelFieldInject
 
@@ -104,7 +104,7 @@ def map_ctx(
             if isinstance(instance, ModelFieldInject):
                 tgtmodel = instance.model
                 tgt_field = instance.field or arg.name
-                if tgtmodel in context:
+                if tgtmodel in context and get_field_type(tgtmodel, tgt_field):
                     value = partial(resolve_from_model, model=tgtmodel, field=tgt_field)
         # by type
         if value is None and bt is not None and bt in context:
