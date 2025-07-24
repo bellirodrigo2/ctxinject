@@ -13,7 +13,6 @@ from typing_extensions import Annotated, Any
 from ctxinject.model import (
     ArgsInjectable,
     ConstrArgInject,
-    Depends,
     DependsInject,
     Injectable,
     ModelFieldInject,
@@ -42,11 +41,11 @@ def get_db() -> Annotated[str, "db_test"]:
 def func1(
     arg1: Annotated[UUID, 123, ConstrArgInject(...)],
     arg2: Annotated[datetime, ConstrArgInject(...)],
-    dep1: Annotated[str, Depends(get_db)],
+    dep1: Annotated[str, DependsInject(get_db)],
     arg3: str = ConstrArgInject(..., min_length=3),
     arg4: MyEnum = ConstrArgInject(...),
     arg5: list[str] = ConstrArgInject(..., max_length=5),
-    dep2: str = Depends(get_db),
+    dep2: str = DependsInject(get_db),
 ) -> Annotated[str, "foobar"]:
     return "None"
 
@@ -58,7 +57,7 @@ def func2(arg1: str, arg2) -> Annotated[str, "teste"]:
     return "None"
 
 
-def func3(arg1: Annotated[int, Depends(get_db)]) -> None:
+def func3(arg1: Annotated[int, DependsInject(get_db)]) -> None:
     pass
 
 
@@ -66,11 +65,11 @@ def get_db2() -> None:
     pass
 
 
-def func4(arg1: Annotated[str, Depends(get_db2)]) -> None:
+def func4(arg1: Annotated[str, DependsInject(get_db2)]) -> None:
     pass
 
 
-def func5(arg: str = Depends(...)) -> str:
+def func5(arg: str = DependsInject(...)) -> str:
     return ""
 
 
@@ -78,7 +77,7 @@ def dep() -> Annotated[int, 123]:
     pass
 
 
-def func6(x: str = Depends(dep)) -> None:
+def func6(x: str = DependsInject(dep)) -> None:
     pass
 
 
@@ -309,7 +308,7 @@ def test_func_signature_check_bad_depends() -> None:
     def get_dep():
         return "value"
 
-    def bad_dep_func(arg: Annotated[str, Depends(get_dep)]) -> None:
+    def bad_dep_func(arg: Annotated[str, DependsInject(get_dep)]) -> None:
         pass
 
     errors = func_signature_check(bad_dep_func, [])
@@ -346,10 +345,10 @@ def test_multiple_error() -> None:
         arg4: str = ModelFieldInject(model="foobar"),
         arg5: bool = ModelFieldInject(model=MyType, field="x"),
         arg6: Path = ModelFieldInject(model=Path, field="is_dir"),
-        arg7: str = Depends("foobar"),
-        arg8=Depends(dep1),
-        arg9: str = Depends(dep1),
-        arg10: str = Depends(dep2),
+        arg7: str = DependsInject("foobar"),
+        arg8=DependsInject(dep1),
+        arg9: str = DependsInject(dep1),
+        arg10: str = DependsInject(dep2),
     ) -> None:
         return
 

@@ -61,8 +61,12 @@ class ModelFieldInject(ArgsInjectable):
 
 
 class CallableInjectable(Injectable, ICallableInjectable):
-    def __init__(self, default: Callable[..., Any]):
-        super().__init__(default)
+    def __init__(
+        self,
+        default: Callable[..., Any],
+        validator: Optional[Callable[..., Any]] = None,
+    ):
+        super().__init__(default=default, validator=validator)
 
 
 class DependsInject(CallableInjectable):
@@ -100,7 +104,3 @@ class ConstrArgInject(ArgsInjectable):
         constr = self._constrained_factory(basetype)
         value = constr(instance, **self.meta)
         return value
-
-
-class Depends(DependsInject):
-    pass
