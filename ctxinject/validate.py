@@ -53,13 +53,14 @@ def constrained_list(
     min_length = kwargs.get("min_length", None)
     max_length = kwargs.get("max_length", None)
     length = len(value)
+
     if min_length is not None and length < min_length:
         raise ValueError(
-            f"List has {length} items, but should have less than {min_length}"
+            f"List has {length} items, but should have at least {min_length}"  # ✅ FIXED
         )
     if max_length is not None and length > max_length:
         raise ValueError(
-            f"List has {length} items, but should have more than {max_length}"
+            f"List has {length} items, but should have at most {max_length}"  # ✅ FIXED
         )
     return value
 
@@ -118,17 +119,20 @@ def constrained_json(
     value: str,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    # try:
-    return json.loads(value)
-    # except json.JSONDecodeError as e:
-    # raise ValueError(str(e))
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED
 
 
 def constrained_bytejson(
     value: bytes,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    return orjson.loads(value)
+    try:
+        return orjson.loads(value)
+    except orjson.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED (consistency)
 
 
 def return_only(
