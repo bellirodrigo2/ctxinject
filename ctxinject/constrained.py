@@ -71,13 +71,16 @@ def ConstrainedItems(
     max_items: Optional[int] = None,
     **kwargs: Any,
 ) -> List[Any]:
-    # if not isinstance(value, list) and not isinstance(value, tuple) and not isinstance(value, set):  # type: ignore
-    # raise ValueError("Value must be a List, Tuple or Set")
 
-    if min_items is not None and len(value) < min_items:
-        raise ValueError(...)
-    if max_items is not None and len(value) > max_items:
-        raise ValueError(...)
+    length = len(value)
+    if min_items is not None and length < min_items:
+        raise ValueError(
+            f"Sequence must have at least {min_items} items. Found {length}"
+        )
+    if max_items is not None and length > max_items:
+        raise ValueError(
+            f"Sequence must have at most {max_items} items. Found {length}"
+        )
 
     v = value
     if isinstance(value, dict):
@@ -114,9 +117,9 @@ def ConstrainedDatetime(
             dt = dt.time()
 
         if from_ is not None and dt < from_:
-            raise ValueError(...)
+            raise ValueError(f"Datetime value must be on or after {from_}")
         if to_ is not None and dt > to_:
-            raise ValueError(...)
+            raise ValueError(f"Datetime value must be on or before {to_}")
 
         return dt
 

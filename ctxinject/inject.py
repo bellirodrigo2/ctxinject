@@ -47,12 +47,6 @@ def wrap_validate(
     return validated
 
 
-type TransformFunction = Callable[
-    [Sequence[VarTypeInfo], Any],
-    Sequence[VarTypeInfo],
-]
-
-
 async def resolve_mapped_ctx(
     input_ctx: Dict[Union[str, type], Any], mapped_ctx: Dict[str, Any]
 ) -> Dict[Any, Any]:

@@ -23,6 +23,8 @@ dev = [
     "ruff>=0.11.7",
     "mypy>=1.15.0",
     "types-python-dateutil",
-    "coverage"
+    "pytest>=7.0.0",
+    "pytest-asyncio",
+    "pytest-cov"
 
 ]

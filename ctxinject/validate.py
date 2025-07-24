@@ -52,11 +52,15 @@ def constrained_list(
 
     min_length = kwargs.get("min_length", None)
     max_length = kwargs.get("max_length", None)
-
-    if min_length is not None and len(value) < min_length:
-        raise ValueError(...)
-    if max_length is not None and len(value) > max_length:
-        raise ValueError(...)
+    length = len(value)
+    if min_length is not None and length < min_length:
+        raise ValueError(
+            f"List has {length} items, but should have less than {min_length}"
+        )
+    if max_length is not None and length > max_length:
+        raise ValueError(
+            f"List has {length} items, but should have more than {max_length}"
+        )
     return value
 
 
@@ -162,25 +166,34 @@ def inject_validation(
     func: Callable[..., Any],
     argproc: Dict[Tuple[type[Any], Type[Any]], Callable[..., Any]] = arg_proc,
     extracttype: Callable[[type[T]], Type[T]] = extract_type,
-) -> None:
+) -> List[str]:
 
     args = get_func_args(func)
-
+    errors: List[str] = []
     for arg in args:
         instance = arg.getinstance(ModelFieldInject)
         if instance is None:
             continue
+
         fieldname = instance.field or arg.name
         modeltype = get_field_type(instance.model, fieldname)
         argtype = arg.basetype
 
-        if modeltype is None or argtype is None:
+        if modeltype is None:
+            errors.append(
+                f"At arg: {arg.name}, Cannot determine field type: {fieldname}, at model: {instance.model.__name__}"
+            )
             continue
 
-        modeltype = extracttype(modeltype)
-        argtype = extracttype(argtype)
-        validator = argproc.get((modeltype, argtype), None)
-        if validator is not None and instance._validator is None:
-            instance._validator = validator
-
-        # da pra tentar aqui baseado em subclass
+        if argtype is None:
+            errors.append(f"No type annotation for {arg.name}")
+            continue
+        try:
+            modeltype = extracttype(modeltype)
+            argtype = extracttype(argtype)
+            validator = argproc.get((modeltype, argtype), None)
+            if validator is not None and instance._validator is None:
+                instance._validator = validator
+        except Exception as e:
+            errors.append(f"Error processing {arg.name}: {e}")
+    return errors
