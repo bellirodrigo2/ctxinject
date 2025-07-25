@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+import copy
 from functools import lru_cache, partial
 from typing import Hashable
 from uuid import UUID
@@ -24,13 +24,7 @@ from typing_extensions import (
     Union,
 )
 
-from ctxinject.validate.common_validators import (
-    constrained_bytejson,
-    constrained_date,
-    constrained_datetime,
-    constrained_json,
-    constrained_time,
-)
+from ctxinject.validate.common_validators import common_arg_proc
 
 # ——— STR ——————————————————————————————————————————————————————————————
 
@@ -156,20 +150,17 @@ constrained_any_url = partial(constrained_str_type, btype=AnyUrl)
 constrained_ip_any = partial(constrained_str_type, btype=IPvAnyAddress)
 # ——— FINAL MAPPING————————————————————————————————————————————————
 
-arg_proc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
+copied_argproc = copy.deepcopy(common_arg_proc)
+arg_proc_pydantic: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
     (str, str): constrained_str,
     (int, int): constrained_num,
     (float, float): constrained_num,
     (list, list): constrained_list,
     (dict, dict): constrained_dict,
-    (str, date): constrained_date,
-    (str, time): constrained_time,
-    (str, datetime): constrained_datetime,
-    (str, dict): constrained_json,
-    (bytes, dict): constrained_bytejson,
     (str, UUID): constrained_uuid,
     (str, EmailStr): constrained_email,
     (str, HttpUrl): constrained_http_url,
     (str, AnyUrl): constrained_any_url,
     (str, IPvAnyAddress): constrained_ip_any,
 }
+arg_proc = {**copied_argproc, **arg_proc_pydantic}

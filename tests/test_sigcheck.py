@@ -8,7 +8,7 @@ from typing import List as List_t
 from uuid import UUID
 
 from typemapping import get_func_args
-from typing_extensions import Annotated, Any, List
+from typing_extensions import Annotated, Any, Dict, List
 
 from ctxinject.model import (
     ArgsInjectable,
@@ -145,7 +145,7 @@ def test_model_field_ok() -> None:
         a: List_t[str] = ModelFieldInject(Model),
         b: Dict_t[str, str] = ModelFieldInject(Model),
         c: Enum = ModelFieldInject(Model),
-        f: Dict_t[str, str] = ModelFieldInject(Model, field="b"),
+        f: Dict[str, str] = ModelFieldInject(Model, field="b"),
         d: Base = ModelFieldInject(Model),
         h: Derived = ModelFieldInject(Model, field="d"),
     ) -> None:

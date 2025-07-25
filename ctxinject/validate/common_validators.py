@@ -1,5 +1,6 @@
 import json
 from datetime import date, datetime, time
+from typing import Callable, Hashable, Tuple
 from uuid import UUID
 
 import orjson
@@ -66,3 +67,13 @@ def constrained_bytejson(
         return orjson.loads(value)
     except orjson.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED (consistency)
+
+
+common_arg_proc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
+    (str, date): constrained_date,
+    (str, time): constrained_time,
+    (str, datetime): constrained_datetime,
+    (str, UUID): constrained_uuid,
+    (str, dict): constrained_json,
+    (bytes, dict): constrained_bytejson,
+}

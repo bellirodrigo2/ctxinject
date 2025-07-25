@@ -1,3 +1,5 @@
+# ruff: noqa
+# mypy: ignore-errors
 """
 Complete usage examples for ctxinject library.
 
@@ -5,16 +7,16 @@ This file demonstrates all the main user APIs with practical examples.
 """
 
 import asyncio
-import os
 import sys
 import time
 from functools import partial
+from pathlib import Path
 from typing import Any, Dict, List
 
 from typing_extensions import Annotated
 
-# Add the parent directory to Python path to import local ctxinject
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from ctxinject.inject import get_mapped_ctx, inject_args, resolve_mapped_ctx
 from ctxinject.model import ArgsInjectable, DependsInject, ModelFieldInject

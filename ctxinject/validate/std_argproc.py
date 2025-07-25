@@ -1,17 +1,11 @@
-from datetime import date, datetime, time
+import copy
 from typing import Hashable
 from uuid import UUID
 
 from typing_extensions import Any, Callable, Dict, List, Tuple, Union
 
 from ctxinject.constrained import ConstrainedNumber, ConstrainedStr, ConstrainedUUID
-from ctxinject.validate.common_validators import (
-    constrained_bytejson,
-    constrained_date,
-    constrained_datetime,
-    constrained_json,
-    constrained_time,
-)
+from ctxinject.validate.common_validators import common_arg_proc
 
 
 def constrained_str(value: str, **kwargs: Any) -> str:
@@ -78,16 +72,13 @@ def return_only(
     return t
 
 
-arg_proc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
+copied_argproc = copy.deepcopy(common_arg_proc)
+arg_proc_std: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
     (str, str): constrained_str,
     (int, int): constrained_num,
     (float, float): constrained_num,
     (list, list): constrained_list,
     (dict, dict): constrained_dict,
-    (str, date): constrained_date,
-    (str, time): constrained_time,
-    (str, datetime): constrained_datetime,
     (str, UUID): constrained_uuid,
-    (str, dict): constrained_json,
-    (bytes, dict): constrained_bytejson,
 }
+arg_proc = {**copied_argproc, **arg_proc_std}

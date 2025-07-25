@@ -14,7 +14,7 @@ from ctxinject.validate.std_argproc import arg_proc as std_arg_proc
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_str(use_pydantic):
+def test_validate_str(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -36,7 +36,7 @@ def test_validate_str(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_int(use_pydantic):
+def test_validate_int(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -58,7 +58,7 @@ def test_validate_int(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_float(use_pydantic):
+def test_validate_float(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -83,7 +83,7 @@ def test_validate_float(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_list(use_pydantic):
+def test_validate_list(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -112,7 +112,7 @@ def test_validate_list(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_dict(use_pydantic):
+def test_validate_dict(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -144,7 +144,7 @@ def test_validate_dict(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_date(use_pydantic):
+def test_validate_date(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -168,7 +168,7 @@ def test_validate_date(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_time(use_pydantic):
+def test_validate_time(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -192,7 +192,7 @@ def test_validate_time(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_datetime(use_pydantic):
+def test_validate_datetime(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -218,7 +218,7 @@ def test_validate_datetime(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_uuid(use_pydantic):
+def test_validate_uuid(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -240,7 +240,7 @@ def test_validate_uuid(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_json(use_pydantic):
+def test_validate_json(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
@@ -263,7 +263,7 @@ def test_validate_json(use_pydantic):
 
 
 @pytest.mark.parametrize("use_pydantic", [True, False])
-def test_validate_bytesjson(use_pydantic):
+def test_validate_bytesjson(use_pydantic: bool) -> None:
     arg_proc = pydantic_arg_proc if use_pydantic else std_arg_proc
 
     class Model:
