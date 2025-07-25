@@ -6,10 +6,10 @@ from typing import (
     Annotated,
     Any,
     Callable,
-    List,
     Mapping,
     Optional,
     Sequence,
+    Tuple,
     Type,
     Union,
     get_args,
@@ -65,12 +65,12 @@ def ConstrainedNumber(
 
 def ConstrainedItems(
     value: Sequence[Any],
-    basetype: tuple[Type[Any], ...],
+    basetype: Tuple[Type[Any], ...],
     values_check: Optional[Mapping[str, Any]] = None,
     min_items: Optional[int] = None,
     max_items: Optional[int] = None,
     **kwargs: Any,
-) -> List[Any]:
+) -> Sequence[Any]:
 
     length = len(value)
     if min_items is not None and length < min_items:
@@ -84,7 +84,7 @@ def ConstrainedItems(
 
     v = value
     if isinstance(value, dict):
-        v = list(value.keys())
+        v = list(value.keys())  # type: ignore
 
     constrained = constrained_factory(basetype[0])
     for item in v:
@@ -101,7 +101,7 @@ def ConstrainedDatetime(
     value: str,
     from_: Optional[Union[datetime, date, time]] = None,
     to_: Optional[Union[datetime, date, time]] = None,
-    which: Union[Union[datetime, date, time], date, time] = datetime,
+    which: Type[Union[datetime, date, time]] = datetime,
     fmt: Optional[str] = None,
     **_: Any,
 ) -> Union[datetime, date, time]:
@@ -112,13 +112,12 @@ def ConstrainedDatetime(
             dt = parsedate(value)
 
         if which == date:
-            dt = dt.date()
+            dt = dt.date()  # type: ignore
         elif which == time:
-            dt = dt.time()
-
-        if from_ is not None and dt < from_:
+            dt = dt.time()  # type: ignore
+        if from_ is not None and dt < from_:  # type: ignore
             raise ValueError(f"Datetime value must be on or after {from_}")
-        if to_ is not None and dt > to_:
+        if to_ is not None and dt > to_:  # type: ignore
             raise ValueError(f"Datetime value must be on or before {to_}")
 
         return dt

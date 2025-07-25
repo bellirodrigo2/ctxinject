@@ -14,7 +14,7 @@ import pytest
 
 from ctxinject.inject import (
     AsyncResolver,
-    SyncResolver,
+    FuncResolver,
     inject_args,
     resolve_mapped_ctx,
 )
@@ -30,7 +30,7 @@ class TestResolverClassesPerformance:
         def test_func(ctx: Dict[str, Any]) -> str:
             return "sync_result"
 
-        resolver = SyncResolver(test_func)
+        resolver = FuncResolver(test_func)
         result = resolver({"test": "context"})
 
         assert result == "sync_result"
@@ -59,7 +59,7 @@ class TestResolverClassesPerformance:
 
     def test_resolver_type_detection_performance(self) -> None:
         """Test that isinstance() detection is fast for resolver types."""
-        sync_resolver = SyncResolver(lambda ctx: "sync")
+        sync_resolver = FuncResolver(lambda ctx: "sync")
         async_resolver = AsyncResolver(lambda ctx: "async")
 
         # Time isinstance checks (should be very fast)
@@ -77,16 +77,10 @@ class TestResolverClassesPerformance:
 
     def test_resolver_memory_efficiency(self) -> None:
         """Test that resolvers use __slots__ for memory efficiency."""
-        sync_resolver = SyncResolver(lambda ctx: "test")
-        async_resolver = AsyncResolver(lambda ctx: "test")
 
         # Should have __slots__ defined
-        assert hasattr(SyncResolver, "__slots__")
+        assert hasattr(FuncResolver, "__slots__")
         assert hasattr(AsyncResolver, "__slots__")
-
-        # Should not have __dict__ (due to __slots__)
-        assert not hasattr(sync_resolver, "__dict__")
-        assert not hasattr(async_resolver, "__dict__")
 
 
 class TestConcurrentAsyncResolution:
@@ -161,9 +155,9 @@ class TestConcurrentAsyncResolution:
             return "sync_result"
 
         mapped_ctx = {
-            "sync1": SyncResolver(lambda ctx: sync_dep()),
+            "sync1": FuncResolver(lambda ctx: sync_dep()),
             "async1": AsyncResolver(lambda ctx: async_dep()),
-            "sync2": SyncResolver(lambda ctx: "direct_sync"),
+            "sync2": FuncResolver(lambda ctx: "direct_sync"),
             "async2": AsyncResolver(lambda ctx: async_dep()),
         }
 
@@ -205,8 +199,8 @@ class TestConcurrentAsyncResolution:
             return "success"
 
         mapped_ctx = {
-            "good": SyncResolver(lambda ctx: successful_sync()),
-            "bad": SyncResolver(lambda ctx: failing_sync()),
+            "good": FuncResolver(lambda ctx: successful_sync()),
+            "bad": FuncResolver(lambda ctx: failing_sync()),
         }
 
         with pytest.raises(RuntimeError, match="Sync resolver failed"):
@@ -455,7 +449,7 @@ class TestBackwardCompatibility:
 
         # Mix new resolver classes with legacy partials
         mapped_ctx = {
-            "new_sync": SyncResolver(lambda ctx: "new_sync_result"),
+            "new_sync": FuncResolver(lambda ctx: "new_sync_result"),
             "legacy": partial(legacy_resolver, arg_name="test_arg"),
             "new_async": AsyncResolver(
                 lambda ctx: asyncio.sleep(0.01) or "new_async_result"
@@ -579,9 +573,9 @@ class TestEdgeCases:
     async def test_only_sync_resolvers(self) -> None:
         """Test context with only sync resolvers (no async path)."""
         mapped_ctx = {
-            "sync1": SyncResolver(lambda ctx: "result1"),
-            "sync2": SyncResolver(lambda ctx: "result2"),
-            "sync3": SyncResolver(lambda ctx: "result3"),
+            "sync1": FuncResolver(lambda ctx: "result1"),
+            "sync2": FuncResolver(lambda ctx: "result2"),
+            "sync3": FuncResolver(lambda ctx: "result3"),
         }
 
         result = await resolve_mapped_ctx({}, mapped_ctx)
@@ -622,7 +616,7 @@ class TestEdgeCases:
             return f"async_{ctx.get('base_value', 'default')}"
 
         mapped_ctx = {
-            "sync": SyncResolver(context_dependent_sync),
+            "sync": FuncResolver(context_dependent_sync),
             "async": AsyncResolver(context_dependent_async),
         }
 

@@ -36,7 +36,8 @@ class Injectable(Iinjectable):
 
     def validate(self, instance: Any, basetype: Type[Any]) -> Any:
         self.meta["basetype"] = basetype
-        return self._validator(instance, **self.meta)
+        if self.has_validate:
+            return self._validator(instance, **self.meta)  # type: ignore
 
 
 class ArgsInjectable(Injectable):

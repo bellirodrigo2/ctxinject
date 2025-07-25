@@ -77,7 +77,7 @@ def constrained_dict(
 
 def _constrained_datetime(
     value: str,
-    which: Union[datetime, date, time],
+    which: Type[Union[datetime, date, time]],
     **kwargs: Any,
 ) -> Union[datetime, date, time]:
 
@@ -91,21 +91,21 @@ def constrained_date(
     value: str,
     **kwargs: Any,
 ) -> date:
-    return _constrained_datetime(value, date, **kwargs)
+    return _constrained_datetime(value, date, **kwargs)  # type: ignore
 
 
 def constrained_time(
     value: str,
     **kwargs: Any,
 ) -> time:
-    return _constrained_datetime(value, time, **kwargs)
+    return _constrained_datetime(value, time, **kwargs)  # type: ignore
 
 
 def constrained_datetime(
     value: str,
     **kwargs: Any,
 ) -> datetime:
-    return _constrained_datetime(value, datetime, **kwargs)
+    return _constrained_datetime(value, datetime, **kwargs)  # type: ignore
 
 
 def constrained_uuid(

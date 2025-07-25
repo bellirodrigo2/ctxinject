@@ -2,9 +2,12 @@
 
 **High-performance dependency injection and context mapping for Python**
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/yourusername/ctxinject/workflows/Tests/badge.svg)](https://github.com/yourusername/ctxinject/actions)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue)](http://mypy-lang.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 A lightweight, FastAPI-inspired dependency injection library with advanced context mapping, async/sync support, and robust type validation. Perfect for building scalable applications with clean separation of concerns.
 
@@ -292,9 +295,9 @@ async def main():
     result = await app.execute_handler("process_order", order_context)
 ```
 
-## 🎨 Constraint Validation
-
 ### Built-in Validators
+
+ctxinject comes with a comprehensive set of built-in validators that are **easily extensible** for custom validation needs:
 
 ```python
 from ctxinject import ConstrArgInject, constrained_factory
@@ -344,9 +347,12 @@ context = {
 }
 ```
 
-### Custom Validators
+### Easily Extensible Validation System
+
+The validation system is designed for easy extension with custom validators:
 
 ```python
+# Custom validator example
 def validate_strong_password(password: str, **kwargs) -> str:
     """Custom password strength validator."""
     if len(password) < 8:
@@ -363,13 +369,34 @@ def validate_strong_password(password: str, **kwargs) -> str:
     
     return password
 
+# Custom constraint factory
+def custom_constrained_factory(target_type):
+    """Extend the built-in factory with custom validators."""
+    if target_type == str:
+        return lambda value, **kwargs: validate_strong_password(value, **kwargs)
+    
+    # Fall back to built-in factory
+    return constrained_factory(target_type)
+
+# Usage with custom validator
 async def register_user(
     password: str = ConstrArgInject(
-        constrained_factory,
+        custom_constrained_factory,
         validator=validate_strong_password
     )
 ) -> dict:
     return {"password_hash": hash_password(password)}
+
+# Add your own constraint types
+from ctxinject.validate import arg_proc
+
+# Extend built-in processors
+arg_proc.update({
+    (str, bool): lambda v, **k: v.lower() in ('true', '1', 'yes', 'on'),
+    (str, tuple): lambda v, **k: tuple(v.split(',')),
+    (str, set): lambda v, **k: set(v.split(',')),
+})
+```
 ```
 
 ## 🧪 Lambda-Friendly Patterns
@@ -403,6 +430,38 @@ async def proper_handler(
 ) -> dict:
     return {"user_id": user_id, "name": user_name}
 ```
+
+## 🧪 Testing and Quality Assurance
+
+ctxinject maintains high code quality standards with comprehensive testing:
+
+### Test Coverage
+- **Multi-version testing**: Python 3.8, 3.9, 3.10, 3.11, 3.12
+- **Comprehensive test suite**: 180+ tests covering all functionality
+- **Performance benchmarks**: Ensuring optimal performance
+- **Type safety**: Full mypy strict mode compliance
+
+### Continuous Integration
+```bash
+# Local testing
+pytest                    # Run all tests
+tox                      # Test all Python versions
+tox -e lint              # Code quality checks
+
+# GitHub Actions automatically runs:
+# ✅ Tests on Python 3.8-3.12
+# ✅ Code formatting (black, isort)
+# ✅ Linting (ruff)
+# ✅ Type checking (mypy)
+```
+
+### Quality Tools
+- **Black**: Code formatting
+- **isort**: Import sorting  
+- **Ruff**: Fast Python linter
+- **MyPy**: Static type checking
+- **pytest**: Testing framework
+- **tox**: Multi-environment testing
 
 ## 🚀 Performance Characteristics
 
@@ -514,5 +573,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Thanks to all [contributors](https://github.com/your-org/ctxinject/graphs/contributors)
 
 ---
-
-**Built with ❤️ for high-performance Python applications**

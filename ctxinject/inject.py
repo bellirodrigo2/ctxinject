@@ -14,8 +14,30 @@ class UnresolvedInjectableError(Exception):
     ...
 
 
-class SyncResolver:
-    """Synchronous resolver wrapper for optimal performance."""
+class AsyncResolver:
+    """Asynchronous resolver wrapper for optimal performance."""
+
+    __slots__ = ("_func",)
+
+    def __init__(self, func: Callable[..., Any]) -> None:
+        self._func = func
+
+    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        return self._func(context)
+
+
+class BaseSyncResolver:
+    """Base class for all resolvers."""
+
+    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        raise NotImplementedError("Subclasses must implement __call__")
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(...)"
+
+
+class FuncResolver(BaseSyncResolver):
+    """Synchronous resolver wrapper from function."""
 
     __slots__ = ("_func",)
 
@@ -26,35 +48,54 @@ class SyncResolver:
         return self._func(context)
 
 
-class AsyncResolver:
-    """Asynchronous resolver wrapper for optimal performance."""
+class NameResolver(BaseSyncResolver):
+    """Resolves by argument name from context."""
 
-    __slots__ = ("_func",)
+    __slots__ = ("_arg_name",)
 
-    def __init__(self, func: Callable[[Dict], Any]) -> None:
-        self._func = func
+    def __init__(self, arg_name: str) -> None:
+        self._arg_name = arg_name
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        return self._func(context)
+        return context[self._arg_name]
 
 
-def resolve_by_name(context: Dict[Union[str, Type[Any]], Any], arg: str) -> Any:
-    return context[arg]
+class TypeResolver(BaseSyncResolver):
+    """Resolves by type from context."""
+
+    __slots__ = ("_target_type",)
+
+    def __init__(self, target_type: Type[Any]) -> None:
+        self._target_type = target_type
+
+    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        return context[self._target_type]
 
 
-def resolve_from_model(
-    context: Dict[Union[str, Type[Any]], Any], model: Type[Any], field: str
-) -> Any:
-    method = getattr(context[model], field)
-    return method() if callable(method) else method
+class DefaultResolver(BaseSyncResolver):
+    """Resolver that returns a pre-configured default value."""
+
+    __slots__ = ("_default_value",)
+
+    def __init__(self, default_value: Any) -> None:
+        self._default_value = default_value
+
+    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        return self._default_value
 
 
-def resolve_by_type(context: Dict[Union[str, Type[Any]], Any], bt: Type[Any]) -> Any:
-    return context[bt]
+class ModelFieldResolver(BaseSyncResolver):
+    """Resolver that extracts field/method from model instance in context."""
 
+    __slots__ = ("_model_type", "_field_name")
 
-def resolve_by_default(context: Dict[Union[str, Type[Any]], Any], default_: Any) -> Any:
-    return default_
+    def __init__(self, model_type: Type[Any], field_name: str) -> None:
+        self._model_type = model_type
+        self._field_name = field_name
+
+    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        method = getattr(context[self._model_type], self._field_name)
+        return method() if callable(method) else method
 
 
 def wrap_validate_sync(
@@ -150,7 +191,7 @@ def map_ctx(
         instance = arg.getinstance(ArgsInjectable)
         default_ = instance.default if instance else None
         bt = arg.basetype
-        value = None
+        value: Union[BaseSyncResolver, AsyncResolver, None] = None
 
         # resolve dependencies
         if arg.hasinstance(CallableInjectable):
@@ -167,7 +208,11 @@ def map_ctx(
                 dep_args, context, allow_incomplete, validate, overrides
             )
 
-            async def resolver(actual_ctx, f=dep_func, ctx_map=dep_ctx_map) -> Any:
+            async def resolver(
+                actual_ctx: Dict[Any, Any],
+                f: Callable[..., Any] = dep_func,
+                ctx_map: Dict[Any, Any] = dep_ctx_map,
+            ) -> Any:
                 sub_kwargs = await resolve_mapped_ctx(actual_ctx, ctx_map)
                 if inspect.iscoroutinefunction(f):
                     return await f(**sub_kwargs)
@@ -184,22 +229,22 @@ def map_ctx(
 
         # by name
         elif arg.name in context:
-            value = SyncResolver(partial(resolve_by_name, arg=arg.name))
+            value = NameResolver(arg_name=arg.name)
         # by model field/method
         elif instance is not None:
             if isinstance(instance, ModelFieldInject):
                 tgtmodel = instance.model
                 tgt_field = instance.field or arg.name
                 if tgtmodel in context and get_field_type(tgtmodel, tgt_field):
-                    value = SyncResolver(
-                        partial(resolve_from_model, model=tgtmodel, field=tgt_field)
+                    value = ModelFieldResolver(
+                        model_type=tgtmodel, field_name=tgt_field
                     )
         # by type
         if value is None and bt is not None and bt in context:
-            value = SyncResolver(partial(resolve_by_type, bt=bt))
+            value = TypeResolver(target_type=bt)
         # by default
         if value is None and default_ is not None and default_ is not Ellipsis:
-            value = SyncResolver(partial(resolve_by_default, default_=default_))
+            value = DefaultResolver(default_value=default_)
 
         if value is None and not allow_incomplete:
             raise UnresolvedInjectableError(
@@ -232,17 +277,15 @@ def map_ctx(
                         name=arg.name,
                     )
                     value = AsyncResolver(validated_func)
-                else:  # SyncResolver or legacy partial
-                    # Handle both SyncResolver and legacy partials
-                    underlying_func = value._func if hasattr(value, "_func") else value
+                else:
                     validated_func = partial(
                         wrap_validate_sync,
-                        func=underlying_func,
+                        func=value,
                         instance=validation_instance,
                         bt=arg.basetype,
                         name=arg.name,
                     )
-                    value = SyncResolver(validated_func)
+                    value = FuncResolver(validated_func)
 
             ctx[arg.name] = value
 
