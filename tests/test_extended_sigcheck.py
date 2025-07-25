@@ -4,7 +4,6 @@ Extended tests for sigcheck.py - covering edge cases and bugs.
 
 from typing import Callable, Optional, Protocol, Union
 
-import pytest
 from typemapping import get_func_args
 from typing_extensions import Annotated
 
