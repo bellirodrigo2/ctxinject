@@ -22,7 +22,7 @@ dev = [
     "black>=23.1.0",
     "isort>=5.11.5",
     "ruff>=0.11.7",
-    "mypy>=1.15.0",
+    "mypy>=1.10.0",
     "types-python-dateutil",
     "pytest>=7.0.0",
     "pytest-asyncio",
