@@ -26,7 +26,9 @@ dev = [
     "types-python-dateutil",
     "pytest>=7.0.0",
     "pytest-asyncio",
-    "pytest-cov"
+    "pytest-cov",
+    "pydantic>=2.0",
+    "pydantic[email]"
 ]
 pydantic = [
     "pydantic>=2.0",

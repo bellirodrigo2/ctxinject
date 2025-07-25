@@ -1,13 +1,12 @@
 from datetime import date, datetime, time
 from functools import lru_cache, partial
+from typing import Hashable
 from uuid import UUID
 
 from pydantic import (
     AnyUrl,
-    DirectoryPath,
     EmailStr,
     Field,
-    FilePath,
     HttpUrl,
     IPvAnyAddress,
     StringConstraints,
@@ -98,12 +97,11 @@ def constrained_num(value: Union[int, float], **kwargs: Any) -> Union[int, float
 
 @lru_cache(maxsize=256)
 def get_list_adapter(
-    item_type: Type[Any],
     min_length: Optional[int],
     max_length: Optional[int],
 ) -> TypeAdapter[Any]:
     fi = Field(min_length=min_length, max_length=max_length)
-    AnnotatedList = Annotated[List[item_type], fi]
+    AnnotatedList = Annotated[List[Any], fi]
     return TypeAdapter(AnnotatedList)
 
 
@@ -112,7 +110,6 @@ def constrained_list(
     **kwargs: Any,
 ) -> List[Any]:
     adapter = get_list_adapter(
-        kwargs.get("item_type", Any),
         kwargs.get("min_length"),
         kwargs.get("max_length"),
     )
@@ -124,13 +121,11 @@ def constrained_list(
 
 @lru_cache(maxsize=256)
 def get_dict_adapter(
-    key_type: Type[Any],
-    value_type: Type[Any],
     min_length: Optional[int],
     max_length: Optional[int],
 ) -> TypeAdapter[Any]:
     fi = Field(min_length=min_length, max_length=max_length)
-    AnnotatedDict = Annotated[Dict[key_type, value_type], fi]
+    AnnotatedDict = Annotated[Dict[Any, Any], fi]
     return TypeAdapter(AnnotatedDict)
 
 
@@ -139,8 +134,6 @@ def constrained_dict(
     **kwargs: Any,
 ) -> Dict[Any, Any]:
     adapter = get_dict_adapter(
-        kwargs.get("key_type", Any),
-        kwargs.get("value_type", Any),
         kwargs.get("min_length"),
         kwargs.get("max_length"),
     )
@@ -148,11 +141,11 @@ def constrained_dict(
 
 
 @lru_cache(maxsize=256)
-def get_str_type_adapter(btype: Type[Any]) -> TypeAdapter[UUID]:
+def get_str_type_adapter(btype: Type[Any]) -> TypeAdapter[Any]:
     return TypeAdapter(btype)
 
 
-def constrained_str_type(value: str, btype: Type[Any], **kwargs: Any) -> UUID:
+def constrained_str_type(value: str, btype: Hashable, **kwargs: Any) -> Any:
     return get_str_type_adapter(btype).validate_python(value)
 
 
@@ -161,11 +154,9 @@ constrained_email = partial(constrained_str_type, btype=EmailStr)
 constrained_http_url = partial(constrained_str_type, btype=HttpUrl)
 constrained_any_url = partial(constrained_str_type, btype=AnyUrl)
 constrained_ip_any = partial(constrained_str_type, btype=IPvAnyAddress)
-constrained_directory_path = partial(constrained_str_type, btype=DirectoryPath)
-constrained_file_path = partial(constrained_str_type, btype=FilePath)
 # ——— FINAL MAPPING————————————————————————————————————————————————
 
-arg_proc: Dict[Tuple[type, Type[Any]], Callable[..., Any]] = {
+arg_proc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
     (str, str): constrained_str,
     (int, int): constrained_num,
     (float, float): constrained_num,
@@ -181,6 +172,4 @@ arg_proc: Dict[Tuple[type, Type[Any]], Callable[..., Any]] = {
     (str, HttpUrl): constrained_http_url,
     (str, AnyUrl): constrained_any_url,
     (str, IPvAnyAddress): constrained_ip_any,
-    (str, DirectoryPath): constrained_directory_path,
-    (str, FilePath): constrained_file_path,
 }

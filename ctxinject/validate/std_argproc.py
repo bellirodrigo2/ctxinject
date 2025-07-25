@@ -1,7 +1,8 @@
 from datetime import date, datetime, time
+from typing import Hashable
 from uuid import UUID
 
-from typing_extensions import Any, Callable, Dict, List, Tuple, Type, Union
+from typing_extensions import Any, Callable, Dict, List, Tuple, Union
 
 from ctxinject.constrained import ConstrainedNumber, ConstrainedStr, ConstrainedUUID
 from ctxinject.validate.common_validators import (
@@ -77,7 +78,7 @@ def return_only(
     return t
 
 
-arg_proc: Dict[Tuple[Type[Any], Type[Any]], Callable[..., Any]] = {
+arg_proc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
     (str, str): constrained_str,
     (int, int): constrained_num,
     (float, float): constrained_num,

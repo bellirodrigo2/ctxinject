@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Tuple, Type, TypeVar, get_origin
+from typing import Any, Callable, Dict, Hashable, List, Tuple, TypeVar, get_origin
 
 from typemapping import get_field_type, get_func_args
 
@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover
     PYDANTIC_VALIDATOR = False
 
 
-def extract_type(bt: Type[Any]) -> Type[Any]:
+def extract_type(bt: Hashable) -> Hashable:
     if not isinstance(bt, type):
         return get_origin(bt)
     return bt
@@ -25,8 +25,8 @@ def extract_type(bt: Type[Any]) -> Type[Any]:
 
 def inject_validation(
     func: Callable[..., Any],
-    argproc: Dict[Tuple[type[Any], Type[Any]], Callable[..., Any]] = arg_proc,
-    extracttype: Callable[[type[T]], Type[T]] = extract_type,
+    argproc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = arg_proc,
+    extracttype: Callable[[Hashable], Hashable] = extract_type,
 ) -> List[str]:
 
     args = get_func_args(func)
@@ -57,7 +57,7 @@ def inject_validation(
             argtype = extracttype(argtype)
             validator = argproc.get((modeltype, argtype), None)
             if validator is None and PYDANTIC_VALIDATOR:
-                validator = add_model(arg, (str, bytes), arg_proc)
+                validator = add_model(arg, (str, bytes), argproc)  # type: ignore
             if validator is not None:
                 instance._validator = validator
         except Exception as e:

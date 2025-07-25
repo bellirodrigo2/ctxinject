@@ -108,7 +108,7 @@ def ConstrainedDatetime(
 ) -> Union[datetime, date, time]:
     try:
         try:
-            dt: datetime = datetime.strptime(value, fmt)
+            dt: datetime = datetime.strptime(value, fmt)  # type: ignore
         except TypeError:
             dt = parsedate(value)
 

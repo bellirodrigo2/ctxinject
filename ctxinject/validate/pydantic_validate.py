@@ -12,10 +12,11 @@ def add_model(
     arg_proc: Dict[Tuple[Type[Any], Type[Any]], Callable[..., Any]],
 ) -> Optional[Callable[..., Any]]:
     model = get_model(arg, from_type)
-    if model is not None and model not in arg_proc:
+    if model is None:
+        return None
+    if model not in arg_proc:
         arg_proc[model] = parse_json_model
-        return parse_json_model
-    return None
+    return parse_json_model
 
 
 def get_model(
