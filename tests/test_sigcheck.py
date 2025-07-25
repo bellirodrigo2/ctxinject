@@ -8,7 +8,7 @@ from typing import List as List_t
 from uuid import UUID
 
 from typemapping import get_func_args
-from typing_extensions import Annotated, Any
+from typing_extensions import Annotated, Any, List
 
 from ctxinject.model import (
     ArgsInjectable,
@@ -44,7 +44,7 @@ def func1(
     dep1: Annotated[str, DependsInject(get_db)],
     arg3: str = ConstrArgInject(..., min_length=3),
     arg4: MyEnum = ConstrArgInject(...),
-    arg5: list[str] = ConstrArgInject(..., max_length=5),
+    arg5: List[str] = ConstrArgInject(..., max_length=5),
     dep2: str = DependsInject(get_db),
 ) -> Annotated[str, "foobar"]:
     return "None"
@@ -155,7 +155,7 @@ def test_model_field_ok() -> None:
 
     if TEST_TYPE:
 
-        def func_2(b: dict[str, str] = ModelFieldInject(Model)) -> None:
+        def func_2(b: Dict_t[str, str] = ModelFieldInject(Model)) -> None:
             pass
 
         assert check_modefield_types(get_func_args(func_2)) == []
@@ -269,7 +269,7 @@ def test_func_signature_check_success() -> None:
         arg2: Annotated[datetime, ConstrArgInject(...)],
         arg3: str = ConstrArgInject(..., min_length=3),
         arg4: MyEnum = ConstrArgInject(...),
-        arg5: list[str] = ConstrArgInject(..., max_length=5),
+        arg5: List[str] = ConstrArgInject(..., max_length=5),
     ) -> None:
         pass
 
