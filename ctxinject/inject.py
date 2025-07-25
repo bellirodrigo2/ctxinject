@@ -9,7 +9,15 @@ from ctxinject.model import ArgsInjectable, CallableInjectable, ModelFieldInject
 
 
 class UnresolvedInjectableError(Exception):
-    """Raised when a dependency cannot be resolved in the injection context."""
+    """
+    Raised when a dependency cannot be resolved in the injection context.
+
+    This exception is thrown when:
+    - A required argument has no corresponding value in the context
+    - A type cannot be found in the context
+    - A model field injection fails to resolve
+    - allow_incomplete=False and some dependencies are missing
+    """
 
     ...
 
@@ -20,16 +28,19 @@ class AsyncResolver:
     __slots__ = ("_func",)
 
     def __init__(self, func: Callable[..., Any]) -> None:
+        """Initialize async resolver with a callable."""
         self._func = func
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Execute the async resolver function."""
         return self._func(context)
 
 
 class BaseSyncResolver:
-    """Base class for all resolvers."""
+    """Base class for all synchronous resolvers."""
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Execute the resolver function."""
         raise NotImplementedError("Subclasses must implement __call__")
 
     def __repr__(self) -> str:
@@ -42,9 +53,11 @@ class FuncResolver(BaseSyncResolver):
     __slots__ = ("_func",)
 
     def __init__(self, func: Callable[[Dict[Any, Any]], Any]) -> None:
+        """Initialize function resolver."""
         self._func = func
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Execute the wrapped function with context."""
         return self._func(context)
 
 
@@ -54,9 +67,11 @@ class NameResolver(BaseSyncResolver):
     __slots__ = ("_arg_name",)
 
     def __init__(self, arg_name: str) -> None:
+        """Initialize name-based resolver."""
         self._arg_name = arg_name
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Resolve value by name from context."""
         return context[self._arg_name]
 
 
@@ -66,9 +81,11 @@ class TypeResolver(BaseSyncResolver):
     __slots__ = ("_target_type",)
 
     def __init__(self, target_type: Type[Any]) -> None:
+        """Initialize type-based resolver."""
         self._target_type = target_type
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Resolve value by type from context."""
         return context[self._target_type]
 
 
@@ -78,9 +95,11 @@ class DefaultResolver(BaseSyncResolver):
     __slots__ = ("_default_value",)
 
     def __init__(self, default_value: Any) -> None:
+        """Initialize default value resolver."""
         self._default_value = default_value
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Return the pre-configured default value."""
         return self._default_value
 
 
@@ -90,10 +109,12 @@ class ModelFieldResolver(BaseSyncResolver):
     __slots__ = ("_model_type", "_field_name")
 
     def __init__(self, model_type: Type[Any], field_name: str) -> None:
+        """Initialize model field resolver."""
         self._model_type = model_type
         self._field_name = field_name
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Extract field or call method from model instance."""
         method = getattr(context[self._model_type], self._field_name)
         return method() if callable(method) else method
 
@@ -130,7 +151,37 @@ async def resolve_mapped_ctx(
     """
     Resolve mapped context with optimal sync/async separation using type checking.
 
-    Uses isinstance() for fast O(1) type checking to separate sync and async resolvers.
+    This function efficiently resolves a pre-mapped context by:
+    1. Separating sync and async resolvers using fast isinstance() checks
+    2. Executing sync resolvers immediately
+    3. Batching async resolvers for concurrent execution
+    4. Preserving original exceptions without wrapping
+
+    Args:
+        input_ctx: The original injection context containing values and types
+        mapped_ctx: Pre-mapped resolvers from get_mapped_ctx() or map_ctx()
+
+    Returns:
+        Dictionary with resolved argument names and their values
+
+    Raises:
+        Any exceptions from resolver execution are preserved and re-raised
+
+    Example:
+        ```python
+        # Get mapped context for a function
+        mapped = get_mapped_ctx(my_function, context)
+
+        # Resolve all dependencies
+        resolved = await resolve_mapped_ctx(context, mapped)
+
+        # Now you can call the function with resolved args
+        result = my_function(**resolved)
+        ```
+
+    Note:
+        Uses isinstance() for fast O(1) type checking to separate sync and async resolvers.
+        All async operations are executed concurrently for optimal performance.
     """
     if not mapped_ctx:
         return {}
@@ -183,6 +234,9 @@ def map_ctx(
 ) -> Dict[str, Any]:
     """
     Map context arguments to resolvers using optimal resolver wrappers.
+
+    Internal function that analyzes function arguments and creates appropriate
+    resolvers for each parameter based on the injection context.
     """
     ctx: Dict[str, Any] = {}
     overrides = overrides or {}
@@ -299,7 +353,42 @@ def get_mapped_ctx(
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
 ) -> Dict[str, Any]:
-    """Get mapped context with optimal resolver wrappers."""
+    """
+    Get mapped context with optimal resolver wrappers for a function.
+
+    This function analyzes a function's signature and creates a mapping of
+    parameter names to their corresponding resolvers based on the injection context.
+
+    Args:
+        func: The function to analyze and create resolvers for
+        context: Injection context containing values, types, and model instances
+        allow_incomplete: Whether to allow missing dependencies (default: True)
+        validate: Whether to apply validation if defined (default: True)
+        overrides: Optional mapping to override dependency functions
+
+    Returns:
+        Dictionary mapping parameter names to their resolvers
+
+    Raises:
+        UnresolvedInjectableError: When allow_incomplete=False and dependencies are missing
+
+    Example:
+        ```python
+        def my_func(name: str, count: int = ArgsInjectable(42)):
+            return f"{name}: {count}"
+
+        context = {"name": "test", int: 100}
+        mapped = get_mapped_ctx(my_func, context)
+
+        # mapped contains resolvers for 'name' and 'count' parameters
+        # You can then use resolve_mapped_ctx() to get actual values
+        ```
+
+    Note:
+        This is typically used internally by inject_args(), but can be useful
+        for advanced scenarios where you need to inspect or modify the resolution
+        process before executing it.
+    """
     funcargs = get_func_args(func)
     return map_ctx(funcargs, context, allow_incomplete, validate, overrides)
 
@@ -312,10 +401,100 @@ async def inject_args(
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
 ) -> partial[Any]:
     """
-    Inject arguments into function with optimal performance.
+    Inject arguments into function with optimal performance using dependency injection.
 
-    Uses fast isinstance() checks to separate sync and async resolvers for
-    maximum performance in the critical path.
+    This is the main entry point for dependency injection. It analyzes a function's
+    signature, resolves dependencies from the provided context, and returns a
+    partially applied function with those dependencies injected.
+
+    Args:
+        func: The target function to inject dependencies into
+        context: Dictionary containing injectable values:
+            - By name: {"param_name": value}
+            - By type: {SomeClass: instance}
+            - Model instances for ModelFieldInject
+        allow_incomplete: If True, allows missing dependencies (they remain as parameters).
+                         If False, raises UnresolvedInjectableError for missing deps.
+        validate: Whether to apply validation functions defined in injectable annotations
+        overrides: Optional mapping to replace dependency functions with alternatives
+
+    Returns:
+        A functools.partial object with resolved dependencies pre-filled.
+        The returned function has a reduced signature containing only unresolved parameters.
+
+    Raises:
+        UnresolvedInjectableError: When allow_incomplete=False and required dependencies
+                                 cannot be resolved from context
+        ValidationError: When validate=True and a validator rejects a value
+
+    Examples:
+        Basic injection by name and type:
+        ```python
+        from typing_extensions import Annotated
+        from ctxinject.inject import inject_args
+        from ctxinject.model import ArgsInjectable
+
+        def greet(name: str, count: int = ArgsInjectable(1)):
+            return f"Hello {name}! (x{count})"
+
+        context = {"name": "Alice", int: 5}
+        injected = await inject_args(greet, context)
+        result = injected()  # "Hello Alice! (x5)"
+        ```
+
+        Dependency injection with validation:
+        ```python
+        def validate_positive(value: int, **kwargs) -> int:
+            if value <= 0:
+                raise ValueError("Must be positive")
+            return value
+
+        def process(count: int = ArgsInjectable(1, validate_positive)):
+            return count * 2
+
+        context = {"count": 5}
+        injected = await inject_args(process, context)
+        result = injected()  # 10
+        ```
+
+        Model field injection:
+        ```python
+        class Config:
+            database_url: str = "sqlite:///app.db"
+            debug: bool = True
+
+        def connect(
+            url: str = ModelFieldInject(Config, "database_url"),
+            debug: bool = ModelFieldInject(Config, "debug")
+        ):
+            return f"Connecting to {url} (debug={debug})"
+
+        config = Config()
+        context = {Config: config}
+        injected = await inject_args(connect, context)
+        result = injected()  # "Connecting to sqlite:///app.db (debug=True)"
+        ```
+
+        Async dependency functions:
+        ```python
+        async def get_user_service() -> UserService:
+            return await UserService.create()
+
+        def handle_request(
+            service: UserService = DependsInject(get_user_service)
+        ):
+            return service.get_current_user()
+
+        context = {}  # Dependencies resolved automatically
+        injected = await inject_args(handle_request, context)
+        result = injected()
+        ```
+
+    Performance Notes:
+        - Uses fast isinstance() checks to separate sync and async resolvers
+        - Async dependencies are resolved concurrently for maximum performance
+        - Supports chaining multiple injections on the same function
+        - Name-based injection takes precedence over type-based injection
     """
     mapped_ctx = get_mapped_ctx(func, context, allow_incomplete, validate, overrides)
     resolved = await resolve_mapped_ctx(context, mapped_ctx)

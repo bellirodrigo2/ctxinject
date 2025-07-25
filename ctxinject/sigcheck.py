@@ -27,6 +27,7 @@ from ctxinject.model import DependsInject, Injectable, ModelFieldInject
 
 
 def error_msg(argname: str, msg: str) -> str:
+    """Format error message for function argument validation."""
     return f'Argument "{argname}" error: {msg}'
 
 
@@ -365,10 +366,84 @@ def func_signature_check(
     """
     Check function signature for injection compatibility.
 
-    Lambda-friendly version that accepts:
-    - Lambda functions without return type annotations when target type is known
-    - Named functions with proper return type annotations
-    - All other injection patterns
+    This function validates that a function's signature is compatible with
+    dependency injection by checking:
+    - All parameters have type annotations
+    - All parameters are injectable (have Injectable annotations or are in modeltype)
+    - Each parameter has only one injectable annotation
+    - Model field injections are valid
+    - Dependency function return types match parameter types
+
+    Args:
+        func: Function to validate
+        modeltype: List of types that are considered injectable by default
+        generictype: Generic type wrapper (e.g., List, Optional) for injectable types
+        bt_default_fallback: Whether to use default type inference fallbacks
+        type_cast: List of allowed type casting pairs for model field injection
+
+    Returns:
+        List of error messages. Empty list means the function is valid for injection.
+
+    Examples:
+        Basic validation:
+        ```python
+        def valid_func(
+            name: str = ArgsInjectable(...),
+            count: int = ArgsInjectable(42)
+        ) -> str:
+            return f"{name}: {count}"
+
+        errors = func_signature_check(valid_func)
+        assert errors == []  # No errors, function is valid
+        ```
+
+        Function with errors:
+        ```python
+        def invalid_func(
+            untyped_param,  # Missing type annotation
+            bad_type: SomeCustomType,  # Not injectable
+        ) -> str:
+            return "test"
+
+        errors = func_signature_check(invalid_func, modeltype=[])
+        assert len(errors) == 2  # Two validation errors
+        ```
+
+        With model types:
+        ```python
+        class Config:
+            database_url: str
+
+        def func_with_model(
+            config: Config,  # Valid because Config is in modeltype
+            url: str = ModelFieldInject(Config, "database_url")
+        ) -> str:
+            return url
+
+        errors = func_signature_check(func_with_model, modeltype=[Config])
+        assert errors == []
+        ```
+
+        Lambda-friendly dependency checking:
+        ```python
+        def get_timestamp() -> float:
+            return time.time()
+
+        def func_with_deps(
+            timestamp: float = DependsInject(get_timestamp),
+            simple_value: int = DependsInject(lambda: 42)  # Simple lambda OK
+        ) -> str:
+            return f"Time: {timestamp}, Value: {simple_value}"
+
+        errors = func_signature_check(func_with_deps)
+        assert errors == []
+        ```
+
+    Note:
+        Lambda-friendly version that accepts:
+        - Lambda functions without return type annotations when target type is known
+        - Named functions with proper return type annotations
+        - All other injection patterns
     """
     modeltype = modeltype or []
 

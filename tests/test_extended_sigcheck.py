@@ -2,6 +2,7 @@
 Extended tests for sigcheck.py - covering edge cases and bugs.
 """
 
+from pathlib import Path
 from typing import Callable, Optional, Protocol, Union
 
 from typemapping import get_func_args
@@ -152,6 +153,14 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = check_depends_types(get_func_args(func_with_lambda))
+        assert errors == []
+
+        def func_with_lambda_path(
+            arg: Path = DependsInject(lambda: Path("./")),
+        ) -> None:
+            pass
+
+        errors = check_depends_types(get_func_args(func_with_lambda_path))
         assert errors == []
 
     def test_nested_annotated(self) -> None:
