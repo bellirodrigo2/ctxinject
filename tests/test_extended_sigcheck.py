@@ -2,21 +2,17 @@
 Extended tests for sigcheck.py - covering edge cases and bugs.
 """
 
-import sys
-from collections.abc import AsyncIterator
-from typing import Callable, ForwardRef, Optional, Protocol, Union
+from typing import Callable, Optional, Protocol, Union
 
 import pytest
 from typemapping import get_func_args
 from typing_extensions import Annotated
 
-from ctxinject.model import ArgsInjectable, DependsInject, Injectable, ModelFieldInject
+from ctxinject.model import DependsInject, Injectable, ModelFieldInject
 from ctxinject.sigcheck import (
-    check_all_injectables,
     check_all_typed,
     check_depends_types,
     check_modefield_types,
-    check_single_injectable,
     func_signature_check,
 )
 
@@ -314,7 +310,6 @@ class TestSigcheckImprovements:
         assert errors == []
 
         # Should also work with actual injection
-        from ctxinject.inject import inject_args
 
         # This should work without errors
         try:

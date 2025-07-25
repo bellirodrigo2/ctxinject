@@ -1,5 +1,3 @@
-import inspect
-
 from typemapping import (
     VarTypeInfo,
     get_field_type,
@@ -257,8 +255,8 @@ def check_depends_types(
                         errors.append(
                             error_msg(
                                 arg_name,
-                                f"Lambda dependency has no return type annotation and target type is unknown. "
-                                f"Add return type: lambda: value -> YourType, or use a named function.",
+                                "Lambda dependency has no return type annotation and target type is unknown. "
+                                "Add return type: lambda: value -> YourType, or use a named function.",
                             )
                         )
                         continue
@@ -268,14 +266,14 @@ def check_depends_types(
                     errors.append(
                         error_msg(
                             arg_name,
-                            f"Depends Return should a be type, but None was found.",
+                            "Depends Return should a be type, but None was found.",
                         )
                     )
                 else:
                     errors.append(
                         error_msg(
                             arg_name,
-                            f"Depends Return should a be type, but None was found.",
+                            "Depends Return should a be type, but None was found.",
                         )
                     )
                 continue

@@ -1,7 +1,7 @@
 import asyncio
 import inspect
 from functools import partial
-from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Type, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Type, Union
 
 from typemapping import VarTypeInfo, get_field_type, get_func_args
 

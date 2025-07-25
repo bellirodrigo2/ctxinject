@@ -20,11 +20,11 @@ test_coverage:
 
 lint:
 	@echo "Running linter (ruff)..."
-	ruff check . --exclude tests/lib
+	ruff check .
 
 lint_fix:
 	@echo "Running linter --fix (ruff)..."
-	ruff check --fix . --exclude tests/lib
+	ruff check --fix .
 
 format:
 	@echo "Formatting code (black e isort)..."
