@@ -8,7 +8,7 @@ and integration with the injection system.
 
 from datetime import datetime
 from functools import partial
-from typing import Any, Dict
+from typing import Any, Dict, List
 from uuid import UUID
 
 import pytest
@@ -160,7 +160,7 @@ class TestConstrainedFactory:
     def test_factory_generic_types(self) -> None:
         """Test factory behavior with generic types."""
         # List factory
-        constr_list = constrained_factory(list[str])
+        constr_list = constrained_factory(List[str])
         assert isinstance(constr_list, partial)
         assert "basetype" in constr_list.keywords
         assert constr_list.keywords["basetype"][0] is str
@@ -173,14 +173,14 @@ class TestConstrainedFactory:
             constr_list(["1", "2", "3"], min_length=2)
 
         # Int list factory
-        constr_listint = constrained_factory(list[int])
+        constr_listint = constrained_factory(List[int])
         constr_listint([40, 45])
 
         with pytest.raises(ValueError):
             constr_listint([40, 45], gt=42)
 
         # Dict factory
-        constr_dict = constrained_factory(dict[str, str])
+        constr_dict = constrained_factory(Dict[str, str])
         constr_dict({"foo": "bar"})
 
     def test_factory_enum_types(self) -> None:
@@ -198,7 +198,7 @@ class TestConstrainedFactory:
 
     def test_factory_annotated_types(self) -> None:
         """Test factory behavior with Annotated types."""
-        factory = constrained_factory(Annotated[list[int], "whatever"])
+        factory = constrained_factory(Annotated[List[int], "whatever"])
         assert isinstance(factory, partial)
         assert factory.keywords["basetype"][0] is int
 

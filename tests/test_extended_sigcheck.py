@@ -53,8 +53,7 @@ class TestSigcheckBugs:
 
         # This should work - both are str under the Annotated wrapper
         errors = check_depends_types(get_func_args(func))
-        # Currently might fail due to inconsistent Annotated handling
-        print(f"Annotated return type errors: {errors}")
+        assert len(errors) == 0
 
     def test_type_cast_bidirectional_bug(self) -> None:
         """Test that type_cast only works in one direction."""
@@ -76,11 +75,10 @@ class TestSigcheckBugs:
         def func2(arg: str = ModelFieldInject(Model2, field="y")) -> None:
             pass
 
-        # This might fail even with reverse cast
         errors2 = check_modefield_types(
             get_func_args(func2), type_cast=[(str, int)]  # Reverse direction
         )
-        print(f"Reverse type cast errors: {errors2}")
+        assert errors2 == []
 
 
 class TestSigcheckEdgeCases:
@@ -93,11 +91,8 @@ class TestSigcheckEdgeCases:
         def func_with_forward_ref(arg: "str" = Injectable()) -> None:
             pass
 
-        try:
-            errors = func_signature_check(func_with_forward_ref)
-            print(f"Forward ref errors: {errors}")
-        except Exception as e:
-            print(f"Forward ref caused exception: {e}")
+        errors = func_signature_check(func_with_forward_ref)
+        assert errors == []
 
     def test_union_types(self) -> None:
         """Test Union types with Injectable."""
@@ -106,7 +101,7 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = func_signature_check(func_with_union)
-        print(f"Union type errors: {errors}")
+        assert errors == []
 
     def test_optional_types(self) -> None:
         """Test Optional types with Injectable."""
@@ -115,7 +110,7 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = func_signature_check(func_with_optional)
-        print(f"Optional type errors: {errors}")
+        assert errors == []
 
     def test_callable_types(self) -> None:
         """Test Callable types with Injectable."""
@@ -124,7 +119,7 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = func_signature_check(func_with_callable)
-        print(f"Callable type errors: {errors}")
+        assert errors == []
 
     def test_protocol_types(self) -> None:
         """Test Protocol types."""
@@ -136,7 +131,7 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = func_signature_check(func_with_protocol)
-        print(f"Protocol type errors: {errors}")
+        assert errors == []
 
     def test_async_dependency_in_sync_function(self) -> None:
         """Test async dependency in sync function."""
@@ -149,7 +144,7 @@ class TestSigcheckEdgeCases:
 
         # Should this be allowed?
         errors = check_depends_types(get_func_args(sync_func))
-        print(f"Async dep in sync func errors: {errors}")
+        assert errors == []
 
     def test_lambda_dependency(self) -> None:
         """Test lambda as dependency (no __name__ attribute)."""
@@ -157,11 +152,8 @@ class TestSigcheckEdgeCases:
         def func_with_lambda(arg: str = DependsInject(lambda: "test")) -> None:
             pass
 
-        try:
-            errors = check_depends_types(get_func_args(func_with_lambda))
-            print(f"Lambda dependency errors: {errors}")
-        except AttributeError as e:
-            print(f"Lambda caused AttributeError: {e}")
+        errors = check_depends_types(get_func_args(func_with_lambda))
+        assert errors == []
 
     def test_nested_annotated(self) -> None:
         """Test nested Annotated types."""
@@ -172,7 +164,7 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = func_signature_check(func_with_nested_annotated)
-        print(f"Nested Annotated errors: {errors}")
+        assert errors == []
 
     def test_model_inheritance_field_resolution(self) -> None:
         """Test field resolution with model inheritance."""
@@ -190,7 +182,7 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = check_modefield_types(get_func_args(func_with_inherited_field))
-        print(f"Model inheritance errors: {errors}")
+        assert errors == []
 
     def test_complex_generic_types(self) -> None:
         """Test deeply nested generic types."""
@@ -201,7 +193,7 @@ class TestSigcheckEdgeCases:
             pass
 
         errors = func_signature_check(func_with_complex_generics)
-        print(f"Complex generics errors: {errors}")
+        assert errors == []
 
     def test_type_hints_failure(self) -> None:
         """Test when get_type_hints fails."""
@@ -214,11 +206,9 @@ class TestSigcheckEdgeCases:
         def func_with_bad_dep(arg: str = DependsInject(problematic_dep)) -> None:
             pass
 
-        try:
-            errors = check_depends_types(get_func_args(func_with_bad_dep))
-            print(f"Bad dependency errors: {errors}")
-        except Exception as e:
-            print(f"get_type_hints failure: {e}")
+        errors = check_depends_types(get_func_args(func_with_bad_dep))
+        assert len(errors) == 1
+        assert "Depends Return should a be type, but None was found" in errors[0]
 
 
 class TestSigcheckStress:
@@ -247,7 +237,7 @@ def many_args_func({', '.join(arg_list)}) -> None:
         start = time.perf_counter()
         errors = func_signature_check(func)
         end = time.perf_counter()
-
+        assert errors == []
         print(f"50 args check took {end - start:.4f}s, errors: {len(errors)}")
 
     def test_error_recovery(self) -> None:
@@ -264,8 +254,7 @@ def many_args_func({', '.join(arg_list)}) -> None:
 
         # Should get multiple errors but not crash
         errors = func_signature_check(broken_func, bt_default_fallback=False)
-        print(f"Multiple errors recovered: {len(errors)} errors found")
-        assert len(errors) >= 4  # Should find multiple distinct errors
+        assert len(errors) == 5  # Should find multiple distinct errors
 
 
 class TestSigcheckImprovements:
@@ -280,8 +269,10 @@ class TestSigcheckImprovements:
         errors = func_signature_check(bad_func, bt_default_fallback=False)
 
         # Error should mention the argument name
-        assert any("arg" in error for error in errors)
-        print(f"Error message: {errors[0] if errors else 'No errors'}")
+        assert any(
+            'Argument "arg" error: has no type definition' in error for error in errors
+        )
+        assert len(errors) == 1
 
     def test_suggestion_context(self) -> None:
         """Test that errors provide context for fixes."""
@@ -295,7 +286,8 @@ class TestSigcheckImprovements:
 
         # Should suggest how to fix
         assert any("cannot be injected" in error for error in errors)
-        print(f"Suggestion: {errors[0] if errors else 'No errors'}")
+        assert len(errors) == 1
+        assert 'Argument "path" error:' in errors[0]
 
     def test_validation_integration_readiness(self) -> None:
         """Test that sigcheck prepares args for actual injection."""
@@ -308,13 +300,3 @@ class TestSigcheckImprovements:
         # Should pass sigcheck
         errors = func_signature_check(valid_func)
         assert errors == []
-
-        # Should also work with actual injection
-
-        # This should work without errors
-        try:
-            # Don't actually inject, just verify compatibility
-            args = get_func_args(valid_func)
-            print(f"Function has {len(args)} injectable args")
-        except Exception as e:
-            pytest.fail(f"Sigcheck-validated function failed in injection: {e}")

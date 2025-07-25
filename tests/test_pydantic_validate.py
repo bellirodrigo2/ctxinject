@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 import pytest
 from pydantic import AnyUrl, BaseModel, EmailStr, HttpUrl, IPvAnyAddress
 from typemapping import get_func_args
@@ -336,7 +338,7 @@ def test_add_model_not_called_when_validator_exists() -> None:
     # Use a mapping that already has str -> dict
     test_arg_proc = {(str, dict): lambda x, **kwargs: {"mock": "data"}}
 
-    def func(arg: dict = ModelFieldInject(model=Model, field="data")) -> None:
+    def func(arg: Dict[Any, Any] = ModelFieldInject(model=Model, field="data")) -> None:
         return
 
     with patch(
