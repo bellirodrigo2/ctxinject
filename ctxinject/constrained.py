@@ -17,6 +17,7 @@ from typing import (
 )
 from uuid import UUID
 
+from dateutil.parser import ParserError
 from dateutil.parser import parse as parsedate
 
 
@@ -106,15 +107,17 @@ def ConstrainedDatetime(
     **_: Any,
 ) -> Union[datetime, date, time]:
     try:
-        if fmt is not None:
+        try:
             dt: datetime = datetime.strptime(value, fmt)
-        else:
+        except TypeError:
             dt = parsedate(value)
 
         if which == date:
             dt = dt.date()  # type: ignore
         elif which == time:
             dt = dt.time()  # type: ignore
+
+        # the lines below can raise Valueerror
         if from_ is not None and dt < from_:  # type: ignore
             raise ValueError(f"Datetime value must be on or after {from_}")
         if to_ is not None and dt > to_:  # type: ignore
@@ -122,7 +125,7 @@ def ConstrainedDatetime(
 
         return dt
 
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError, ParserError) as e:
         raise ValueError(
             f'Arg value should be a valid datetime string. Found "{value}" \n {e}'
         )
