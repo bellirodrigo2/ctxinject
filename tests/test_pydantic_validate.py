@@ -25,8 +25,11 @@ def test_validate_email() -> None:
 
     class Model:
         email: str
+        notvalid: int
 
-    def func(arg: EmailStr = ModelFieldInject(model=Model, field="email")) -> None:
+    def func(
+        arg: EmailStr = ModelFieldInject(model=Model, field="email"),
+    ) -> None:
         return
 
     args = get_func_args(func)
@@ -141,8 +144,12 @@ def test_add_model_str_to_user() -> None:
 
     class Model:
         user_data: str
+        notvalid: int
 
-    def func(arg: UserModel = ModelFieldInject(model=Model, field="user_data")) -> None:
+    def func(
+        arg: UserModel = ModelFieldInject(model=Model, field="user_data"),
+        notvalid: UserModel = ModelFieldInject(model=Model),
+    ) -> None:
         return
 
     args = get_func_args(func)
@@ -330,8 +337,6 @@ def test_add_model_not_called_when_validator_exists() -> None:
     """Test that add_model is not called when validator already exists"""
     from unittest.mock import patch
 
-    from ctxinject.validate.pydantic_validate import add_model
-
     class Model:
         data: str
 
@@ -342,41 +347,79 @@ def test_add_model_not_called_when_validator_exists() -> None:
         return
 
     with patch(
-        "ctxinject.validate.pydantic_validate.add_model", wraps=add_model
+        "ctxinject.validate.pydantic_add_model.pydantic_add_model"
     ) as mock_add_model:
         inject_validation(func, argproc=test_arg_proc)
-        # add_model should not be called since validator exists
+        # add_model should not be called since validator exists in arg_proc
         mock_add_model.assert_not_called()
 
 
-def test_add_model_with_pydantic_validator_false() -> None:
-    """Test that add_model is not called when PYDANTIC_VALIDATOR is False"""
-    from unittest.mock import patch
+def test_custom_add_model_chaining() -> None:
+    """Test that custom add_model works with default processors"""
 
     class Model:
         user_data: str
+        custom_data: str
 
-    def func(arg: UserModel = ModelFieldInject(model=Model, field="user_data")) -> None:
+    class CustomType:
+        def __init__(self, value: str):
+            self.value = value
+
+    def custom_add_model(arg, arg_proc):
+        """Custom processor that handles CustomType conversions"""
+        instance = arg.getinstance(ModelFieldInject)
+        if instance and arg.basetype == CustomType:
+            fieldname = instance.field or arg.name
+            from typemapping import get_field_type
+
+            modeltype = get_field_type(instance.model, fieldname)
+            if modeltype is str:
+
+                def str_to_custom(value: str, basetype=CustomType, **kwargs):
+                    return basetype(value)
+
+                key = (str, CustomType)
+                arg_proc[key] = str_to_custom
+                return str_to_custom
+        return None
+
+    def func(
+        user_arg: UserModel = ModelFieldInject(model=Model, field="user_data"),
+        custom_arg: CustomType = ModelFieldInject(model=Model, field="custom_data"),
+    ) -> None:
         return
 
-    test_arg_proc = {}  # Empty to ensure no validator exists
+    args = get_func_args(func)
+    user_modelinj = args[0].getinstance(ModelFieldInject)
+    custom_modelinj = args[1].getinstance(ModelFieldInject)
 
-    # Mock PYDANTIC_VALIDATOR to be False
-    with patch("ctxinject.validate.inject_validation.PYDANTIC_VALIDATOR", False):
-        inject_validation(func, argproc=test_arg_proc)
+    # Before injection
+    assert not user_modelinj.has_validate
+    assert not custom_modelinj.has_validate
 
-        # Should not add any validators when PYDANTIC_VALIDATOR is False
-        assert len(test_arg_proc) == 0
+    test_arg_proc = {}
+    # Pass custom processor as list
+    inject_validation(func, argproc=test_arg_proc, add_model=[custom_add_model])
 
-        args = get_func_args(func)
-        modelinj = args[0].getinstance(ModelFieldInject)
-        # Should not have validator since add_model wasn't called
-        assert not modelinj.has_validate
+    # After injection - both should have validators
+    assert user_modelinj.has_validate  # From pydantic in default list
+    assert custom_modelinj.has_validate  # From custom processor
+
+    # Test custom processor worked
+    custom_result = custom_modelinj.validate("test_value", basetype=CustomType)
+    assert isinstance(custom_result, CustomType)
+    assert custom_result.value == "test_value"
+
+    # Test pydantic processor worked
+    user_json = '{"name": "Test", "age": 25}'
+    user_result = user_modelinj.validate(user_json, basetype=UserModel)
+    assert isinstance(user_result, UserModel)
+    assert user_result.name == "Test"
 
 
 def test_add_model_directly() -> None:
     """Test add_model function directly"""
-    from ctxinject.validate.pydantic_validate import add_model
+    from ctxinject.validate.pydantic_add_model import pydantic_add_model
 
     test_arg_proc = {}
 
@@ -393,7 +436,7 @@ def test_add_model_directly() -> None:
     assert (str, UserModel) not in test_arg_proc
 
     # Call add_model directly
-    result = add_model(arg, (str, bytes), test_arg_proc)
+    result = pydantic_add_model(arg, test_arg_proc)
 
     # Should return the validator function
     assert result is not None
@@ -412,7 +455,7 @@ def test_add_model_directly() -> None:
 
 def test_add_model_does_not_duplicate() -> None:
     """Test that add_model doesn't duplicate entries if called multiple times"""
-    from ctxinject.validate.pydantic_validate import add_model
+    from ctxinject.validate.pydantic_add_model import pydantic_add_model
 
     test_arg_proc = {}
 
@@ -426,11 +469,119 @@ def test_add_model_does_not_duplicate() -> None:
     arg = args[0]
 
     # Call add_model twice
-    result1 = add_model(arg, (str, bytes), test_arg_proc)
-    result2 = add_model(arg, (str, bytes), test_arg_proc)
+    result1 = pydantic_add_model(arg, test_arg_proc)
+    result2 = pydantic_add_model(arg, test_arg_proc)
 
     # Both should return the same function
     assert result1 is result2
 
     # Should only have one entry
     assert len([k for k in test_arg_proc.keys() if k[1] == UserModel]) == 1
+
+
+def test_custom_add_model_only() -> None:
+    """Test using only custom add_model without default processors"""
+    from ctxinject.validate.inject_validation import (
+        inject_validation as core_inject_validation,
+    )
+
+    class Model:
+        data: str
+
+    class SpecialType:
+        def __init__(self, value: str):
+            self.value = value.upper()
+
+    def special_add_model(arg, arg_proc):
+        """Custom processor for SpecialType"""
+        instance = arg.getinstance(ModelFieldInject)
+        if instance and arg.basetype == SpecialType:
+
+            def str_to_special(value: str, basetype=SpecialType, **kwargs):
+                return basetype(value)
+
+            key = (str, SpecialType)
+            arg_proc[key] = str_to_special
+            return str_to_special
+        return None
+
+    def func(arg: SpecialType = ModelFieldInject(model=Model, field="data")) -> None:
+        return
+
+    args = get_func_args(func)
+    modelinj = args[0].getinstance(ModelFieldInject)
+    assert not modelinj.has_validate
+
+    test_arg_proc = {}
+    # Use core inject_validation with only our custom processor
+    core_inject_validation(func, argproc=test_arg_proc, add_model=[special_add_model])
+    assert modelinj.has_validate
+
+    # Test custom processor
+    result = modelinj.validate("hello", basetype=SpecialType)
+    assert isinstance(result, SpecialType)
+    assert result.value == "HELLO"
+
+
+def test_collections_add_model() -> None:
+    """Test collections add_model functionality"""
+    from collections.abc import Mapping, Sequence
+    from typing import Dict, List
+
+    class Model:
+        mapping_field: Dict[str, str]
+        list_field: List[str]
+
+    def func(
+        # Dict to Mapping conversion
+        map_arg: Mapping[str, str] = ModelFieldInject(Model, "mapping_field"),
+        # List to Sequence conversion
+        seq_arg: Sequence[str] = ModelFieldInject(Model, "list_field"),
+    ) -> None:
+        return
+
+    args = get_func_args(func)
+    map_modelinj = args[0].getinstance(ModelFieldInject)
+    seq_modelinj = args[1].getinstance(ModelFieldInject)
+
+    assert not map_modelinj.has_validate
+    assert not seq_modelinj.has_validate
+
+    test_arg_proc = {}
+    inject_validation(func, argproc=test_arg_proc)
+    assert len(test_arg_proc) == 2
+
+
+def test_default_processors_order() -> None:
+    """Test that default processors are applied in correct order"""
+
+    class Model:
+        data: str
+
+    class CustomModel(BaseModel):
+        value: str
+
+    def custom_add_model(arg, arg_proc):
+        """Custom processor that processes everything as string"""
+        instance = arg.getinstance(ModelFieldInject)
+        if instance:
+            # This should NOT override Pydantic processing
+            return None
+
+    def func(arg: CustomModel = ModelFieldInject(model=Model, field="data")) -> None:
+        return
+
+    args = get_func_args(func)
+    modelinj = args[0].getinstance(ModelFieldInject)
+
+    test_arg_proc = {}
+    # Custom processor first, then defaults (collections, pydantic)
+    inject_validation(func, argproc=test_arg_proc, add_model=[custom_add_model])
+
+    assert modelinj.has_validate
+
+    # Should use Pydantic processing since custom returned None
+    json_data = '{"value": "test"}'
+    result = modelinj.validate(json_data, basetype=CustomModel)
+    assert isinstance(result, CustomModel)
+    assert result.value == "test"

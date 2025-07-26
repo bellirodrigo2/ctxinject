@@ -1,4 +1,4 @@
-.PHONY: install install_dev test test_coverage lint lint_fix format build clean update_dependency
+.PHONY: install install_dev test test_coverage lint lint_fix format build clean docs docs_clean docs_serve
 
 install:
 	@echo "Instaling dependencies..."
@@ -39,7 +39,14 @@ clean:
 	@echo "Cleaning cache and build/dist related files..."
 	@python -c "import shutil, glob, os; [shutil.rmtree(d, ignore_errors=True) for d in ['dist', 'build', '.mypy_cache', '.pytest_cache', '.ruff_cache'] + glob.glob('*.egg-info')]; [shutil.rmtree(os.path.join(r, d), ignore_errors=True) for r, ds, _ in os.walk('.') for d in ds if d == '__pycache__']"
 
-update_dependency:
-	@if not defined REPO (echo Erro: Forneça o nome do repositório. Exemplo: make update_dependency REPO=ctxinject && exit /b 1)
-	@echo "Updating github dependency $(REPO)..."
-	@pip install --upgrade --force-reinstall "git+https://github.com/bellirodrigo2/$(REPO).git@main"
+docs:
+	@echo "Building documentation..."
+	sphinx-build -b html docs/source docs/build/html
+
+docs_clean:
+	@echo "Cleaning documentation..."
+	sphinx-build -M clean docs/source docs/build
+
+docs_serve:
+	@echo "Serving documentation locally at http://localhost:8000"
+	@python -m http.server 8000 -d docs/build/html

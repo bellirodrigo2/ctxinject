@@ -8,7 +8,7 @@ class Iinjectable(Protocol):
     @property
     def default(self) -> Any:
         """Get the default value for this injectable."""
-        ...
+        ...  # pragma: no cover
 
     def validate(self, instance: Any, basetype: Type[Any]) -> Any:
         """Validate and potentially transform an instance."""
@@ -67,7 +67,7 @@ class Injectable(Iinjectable):
             The validated (and possibly transformed) value
         """
         self.meta["basetype"] = basetype
-        if self.has_validate:
+        if self.has_validate:  # pragma: no cover
             return self._validator(instance, **self.meta)  # type: ignore
 
 

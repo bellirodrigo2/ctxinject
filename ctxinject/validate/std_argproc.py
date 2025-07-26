@@ -1,8 +1,7 @@
 import copy
-from typing import Hashable
 from uuid import UUID
 
-from typing_extensions import Any, Callable, Dict, List, Tuple, Union
+from typing_extensions import Any, Callable, Dict, Hashable, List, Tuple, Union
 
 from ctxinject.constrained import ConstrainedNumber, ConstrainedStr, ConstrainedUUID
 from ctxinject.validate.common_validators import common_arg_proc
@@ -63,13 +62,6 @@ def constrained_uuid(
     **kwargs: Any,
 ) -> UUID:
     return ConstrainedUUID(value, **kwargs)
-
-
-def return_only(
-    t: Any,
-    **kwargs: Any,
-) -> Any:
-    return t
 
 
 copied_argproc = copy.deepcopy(common_arg_proc)

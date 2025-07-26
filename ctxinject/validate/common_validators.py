@@ -1,12 +1,10 @@
 import json
 from datetime import date, datetime, time
-from typing import Callable, Hashable, Tuple
-from uuid import UUID
 
 import orjson
-from typing_extensions import Any, Dict, Type, Union
+from typing_extensions import Any, Callable, Dict, Hashable, Tuple, Type, Union
 
-from ctxinject.constrained import ConstrainedDatetime, ConstrainedUUID
+from ctxinject.constrained import ConstrainedDatetime
 
 
 def _constrained_datetime(
@@ -42,13 +40,6 @@ def constrained_datetime(
     return _constrained_datetime(value, datetime, **kwargs)  # type: ignore
 
 
-def constrained_uuid(
-    value: str,
-    **kwargs: Any,
-) -> UUID:
-    return ConstrainedUUID(value, **kwargs)
-
-
 def constrained_json(
     value: str,
     **kwargs: Any,
@@ -73,7 +64,6 @@ common_arg_proc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
     (str, date): constrained_date,
     (str, time): constrained_time,
     (str, datetime): constrained_datetime,
-    (str, UUID): constrained_uuid,
     (str, dict): constrained_json,
     (bytes, dict): constrained_bytejson,
 }

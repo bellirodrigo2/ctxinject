@@ -1,6 +1,5 @@
 import copy
 from functools import lru_cache, partial
-from typing import Hashable
 from uuid import UUID
 
 from pydantic import (
@@ -17,6 +16,7 @@ from typing_extensions import (
     Any,
     Callable,
     Dict,
+    Hashable,
     List,
     Optional,
     Tuple,

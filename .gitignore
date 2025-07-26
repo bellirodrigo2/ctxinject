@@ -72,6 +72,14 @@ build/
 Dockerfile
 docker-compose.yml
 
+# Documentation builds
+docs/build/
+docs/source/_build/
+
+# Sphinx documentation
+docs/doctrees/
+docs/_build/
+
 # Poetry build artifacts
 *.tar.gz
 *.whl

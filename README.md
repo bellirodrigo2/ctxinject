@@ -437,7 +437,7 @@ ctxinject maintains high code quality standards with comprehensive testing:
 
 ### Test Coverage
 - **Multi-version testing**: Python 3.8, 3.9, 3.10, 3.11, 3.12
-- **Comprehensive test suite**: 180+ tests covering all functionality
+- **Comprehensive test suite**: 200+ tests covering all functionality
 - **Performance benchmarks**: Ensuring optimal performance
 - **Type safety**: Full mypy strict mode compliance
 

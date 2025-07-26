@@ -316,7 +316,7 @@ def _types_compatible(return_type: Any, expected_type: Any) -> bool:
             return _types_compatible(return_args[0], expected_type)
 
     # Handle Union/Optional types
-    from typing import Union
+    from typing_extensions import Union
 
     if get_origin(expected_type) is Union:
         union_args = get_args(expected_type)

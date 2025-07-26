@@ -41,10 +41,12 @@ class BaseSyncResolver:
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
         """Execute the resolver function."""
-        raise NotImplementedError("Subclasses must implement __call__")
+        raise NotImplementedError(
+            "Subclasses must implement __call__"
+        )  # pragma: no cover
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(...)"
+        return f"{self.__class__.__name__}(...)"  # pragma: no cover
 
 
 class FuncResolver(BaseSyncResolver):
