@@ -3,7 +3,7 @@ Extended tests for sigcheck.py - covering edge cases and bugs.
 """
 
 from pathlib import Path
-from typing import Callable, Optional, Protocol, Union
+from typing import Callable, Dict, List, Optional, Protocol, Union
 
 from typemapping import get_func_args
 from typing_extensions import Annotated
@@ -54,31 +54,6 @@ class TestSigcheckBugs:
         # This should work - both are str under the Annotated wrapper
         errors = check_depends_types(get_func_args(func))
         assert len(errors) == 0
-
-    def test_type_cast_bidirectional_bug(self) -> None:
-        """Test that type_cast only works in one direction."""
-
-        class Model:
-            x: str
-
-        def func(arg: str = ModelFieldInject(Model, field="x")) -> None:
-            pass
-
-        # This works: (actual_type, expected_type)
-        errors1 = check_modefield_types(get_func_args(func), type_cast=[(str, str)])
-        assert errors1 == []
-
-        # But reverse direction might not work
-        class Model2:
-            y: int
-
-        def func2(arg: str = ModelFieldInject(Model2, field="y")) -> None:
-            pass
-
-        errors2 = check_modefield_types(
-            get_func_args(func2), type_cast=[(str, int)]  # Reverse direction
-        )
-        assert errors2 == []
 
 
 class TestSigcheckEdgeCases:
@@ -196,7 +171,7 @@ class TestSigcheckEdgeCases:
         """Test deeply nested generic types."""
 
         def func_with_complex_generics(
-            arg: dict[str, list[Optional[Union[int, str]]]] = Injectable(),
+            arg: Dict[str, List[Optional[Union[int, str]]]] = Injectable(),
         ) -> None:
             pass
 

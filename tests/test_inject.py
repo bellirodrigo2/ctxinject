@@ -6,7 +6,7 @@ type-based injection, model field injection, and validation integration.
 """
 
 from functools import partial
-from typing import Any, Dict, Union
+from typing import Any, Dict, Tuple, Union
 
 import pytest
 from typemapping import get_func_args
@@ -208,7 +208,7 @@ class TestInjectArgs:
         def func(
             required: str = ArgsInjectable(...),
             optional: str = ArgsInjectable("default"),
-        ) -> tuple[str, str]:
+        ) -> Tuple[str, str]:
             return required, optional
 
         # With allow_incomplete=True, should succeed
@@ -232,7 +232,7 @@ class TestInjectArgs:
 
         def func(
             base: BaseType = ArgsInjectable(), derived: DerivedType = ArgsInjectable()
-        ) -> tuple[BaseType, DerivedType]:
+        ) -> Tuple[BaseType, DerivedType]:
             return base, derived
 
         derived_instance = DerivedType()

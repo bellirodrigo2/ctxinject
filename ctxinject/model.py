@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional, Protocol, Type, TypeVar, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Type, runtime_checkable
 
 
 @runtime_checkable
@@ -12,15 +12,6 @@ class Iinjectable(Protocol):
 
     def validate(self, instance: Any, basetype: Type[Any]) -> Any:
         """Validate and potentially transform an instance."""
-        ...  # pragma: no cover
-
-
-class ICallableInjectable(Iinjectable, Protocol):
-    """Protocol for injectable dependencies that are callable functions."""
-
-    @property
-    def default(self) -> Callable[..., Any]:
-        """Get the default callable for this injectable."""
         ...  # pragma: no cover
 
 
@@ -222,13 +213,14 @@ class ModelFieldInject(ArgsInjectable):
         return self._model
 
 
-class CallableInjectable(Injectable, ICallableInjectable):
+class CallableInjectable(Injectable):
     """Injectable for callable dependencies (functions, lambdas, etc.)."""
 
     def __init__(
         self,
         default: Callable[..., Any],
         validator: Optional[Callable[..., Any]] = None,
+        **meta: Any,
     ):
         """
         Initialize callable injectable.
@@ -237,7 +229,7 @@ class CallableInjectable(Injectable, ICallableInjectable):
             default: The callable dependency
             validator: Optional validation function
         """
-        super().__init__(default=default, validator=validator)
+        super().__init__(default=default, validator=validator, **meta)
 
 
 class DependsInject(CallableInjectable):
@@ -324,62 +316,3 @@ class DependsInject(CallableInjectable):
     """
 
     pass
-
-
-T = TypeVar("T")
-
-
-class Constrained(Protocol[T]):
-    """Protocol for constraint validation functions."""
-
-    def __call__(self, data: T, **kwargs: object) -> T:
-        """Validate and constrain data."""
-        ...  # pragma: no cover
-
-
-ConstrainedFactory = Callable[[type[Any]], Constrained[T]]
-
-
-class ConstrArgInject(ArgsInjectable):
-    """Injectable with constraint-based validation using factory pattern."""
-
-    def __init__(
-        self,
-        constrained_factory: ConstrainedFactory,
-        default: Any = ...,
-        validator: Optional[Callable[..., Any]] = None,
-        **meta: Any,
-    ):
-        """
-        Initialize constrained injectable.
-
-        Args:
-            constrained_factory: Factory function that creates type-specific constraints
-            default: Default value
-            validator: Optional additional validator
-            **meta: Additional metadata
-        """
-        super().__init__(default, validator, **meta)
-        self._constrained_factory = constrained_factory
-
-    @property
-    def has_validate(self) -> bool:
-        """Always has validation through constraint factory."""
-        return True
-
-    def validate(self, instance: Any, basetype: Type[Any]) -> Any:
-        """
-        Validate using constraint factory and optional custom validator.
-
-        Args:
-            instance: Value to validate
-            basetype: Expected type
-
-        Returns:
-            Validated and constrained value
-        """
-        if self._validator is not None:
-            instance = self._validator(instance, **self.meta)
-        constr = self._constrained_factory(basetype)
-        value = constr(instance, **self.meta)
-        return value

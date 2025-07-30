@@ -8,16 +8,13 @@ to reduce code duplication.
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List
-from uuid import UUID
+from typing import Any, Dict, List, Tuple
 
 import pytest
 from typing_extensions import Annotated
 
-from ctxinject.constrained import constrained_factory
-from ctxinject.model import ArgsInjectable, ConstrArgInject, ModelFieldInject
+from ctxinject.model import ArgsInjectable, ModelFieldInject
 
 # Configure pytest-asyncio
 pytest_plugins = ("pytest_asyncio",)
@@ -212,7 +209,7 @@ def sample_injected_function(
     f: float = 3.14,
     g: bool = True,
     h: float = ModelFieldInject(model=MyModelField, field="f"),
-) -> tuple[str, str, MyModel, int, str, float, bool, float]:
+) -> Tuple[str, str, MyModel, int, str, float, bool, float]:
     """Sample function with various injection types for testing."""
     return a, b, c, d, e, f, g, h
 
@@ -221,20 +218,9 @@ def sample_method_injection_function(
     x: Annotated[str, ArgsInjectable(...)],
     y: str = ModelFieldInject(model=MyModelMethod, field="get_value"),
     z: str = ModelFieldInject(model=MyModelMethod, field="other_method"),
-) -> tuple[str, str, str]:
+) -> Tuple[str, str, str]:
     """Sample function with method injection for testing."""
     return x, y, z
-
-
-def sample_constrained_function(
-    arg1: Annotated[UUID, 123, ConstrArgInject(constrained_factory, ...)],
-    arg2: Annotated[datetime, ConstrArgInject(constrained_factory, ...)],
-    arg3: str = ConstrArgInject(constrained_factory, ..., min_length=3),
-    arg4: MyEnum = ConstrArgInject(constrained_factory, ...),
-    arg5: List[str] = ConstrArgInject(constrained_factory, ..., max_length=5),
-) -> None:
-    """Sample function with constrained arguments for testing."""
-    return None
 
 
 # Utility functions for tests

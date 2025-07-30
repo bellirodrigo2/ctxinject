@@ -4,7 +4,7 @@ Specific test to expose async validation bug.
 """
 
 import asyncio
-from typing import Any
+from typing import Any, Tuple
 
 import pytest
 
@@ -203,7 +203,7 @@ class TestAsyncValidationBug:
                 async_string_provider, validator=string_validator
             ),
             unvalidated_num: int = DependsInject(async_number_provider),  # No validator
-        ) -> tuple[str, int]:
+        ) -> Tuple[str, int]:
             return validated_str, unvalidated_num
 
         injected = await inject_args(handler, {})

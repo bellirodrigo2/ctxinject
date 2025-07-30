@@ -1,5 +1,4 @@
 import sys
-from collections.abc import AsyncIterator
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -8,15 +7,9 @@ from typing import List as List_t
 from uuid import UUID
 
 from typemapping import get_func_args
-from typing_extensions import Annotated, Any, Dict, List
+from typing_extensions import Annotated, Any, AsyncIterator, Dict, List
 
-from ctxinject.model import (
-    ArgsInjectable,
-    ConstrArgInject,
-    DependsInject,
-    Injectable,
-    ModelFieldInject,
-)
+from ctxinject.model import ArgsInjectable, DependsInject, Injectable, ModelFieldInject
 from ctxinject.sigcheck import (
     check_all_injectables,
     check_all_typed,
@@ -25,6 +18,7 @@ from ctxinject.sigcheck import (
     check_single_injectable,
     func_signature_check,
 )
+from ctxinject.validation import validator_check
 
 TEST_TYPE = sys.version_info >= (3, 9)
 
@@ -39,12 +33,12 @@ def get_db() -> Annotated[str, "db_test"]:
 
 
 def func1(
-    arg1: Annotated[UUID, 123, ConstrArgInject(...)],
-    arg2: Annotated[datetime, ConstrArgInject(...)],
+    arg1: Annotated[UUID, 123, ArgsInjectable(...)],
+    arg2: Annotated[datetime, ArgsInjectable(...)],
     dep1: Annotated[str, DependsInject(get_db)],
-    arg3: str = ConstrArgInject(..., min_length=3),
-    arg4: MyEnum = ConstrArgInject(...),
-    arg5: List[str] = ConstrArgInject(..., max_length=5),
+    arg3: str = ArgsInjectable(..., min_length=3),
+    arg4: MyEnum = ArgsInjectable(...),
+    arg5: List[str] = ArgsInjectable(..., max_length=5),
     dep2: str = DependsInject(get_db),
 ) -> Annotated[str, "foobar"]:
     return "None"
@@ -95,8 +89,8 @@ def test_check_all_injectable() -> None:
         pass
 
     def func2_inner(
-        arg1: Annotated[UUID, 123, ConstrArgInject(...)],
-        arg2: Annotated[datetime, ConstrArgInject(...)],
+        arg1: Annotated[UUID, 123, ArgsInjectable(...)],
+        arg2: Annotated[datetime, ArgsInjectable(...)],
         arg3: Path,
         arg4: MyPath,
         arg5: AsyncIterator[MyPath],
@@ -107,7 +101,11 @@ def test_check_all_injectable() -> None:
         pass
 
     assert (
-        check_all_injectables(get_func_args(func2_inner), [Path], AsyncIterator) == []
+        check_all_injectables(
+            get_func_args(func2_inner),
+            [Path, AsyncIterator[MyPath], AsyncIterator[Path]],
+        )
+        == []
     )
 
     errors = check_all_injectables(get_func_args(func2_inner), [])
@@ -265,11 +263,11 @@ def test_multiple_injectables_error() -> None:
 
 def test_func_signature_check_success() -> None:
     def valid_func(
-        arg1: Annotated[UUID, 123, ConstrArgInject(...)],
-        arg2: Annotated[datetime, ConstrArgInject(...)],
-        arg3: str = ConstrArgInject(..., min_length=3),
-        arg4: MyEnum = ConstrArgInject(...),
-        arg5: List[str] = ConstrArgInject(..., max_length=5),
+        arg1: Annotated[UUID, 123, ArgsInjectable(...)],
+        arg2: Annotated[datetime, ArgsInjectable(...)],
+        arg3: str = ArgsInjectable(..., min_length=3),
+        arg4: MyEnum = ArgsInjectable(...),
+        arg5: List[str] = ArgsInjectable(..., max_length=5),
     ) -> None:
         pass
 
@@ -318,7 +316,7 @@ def test_func_signature_check_bad_depends() -> None:
 
 def test_func_signature_check_conflicting_injectables() -> None:
     def bad_multiple_inject_func(
-        arg: Annotated[str, ConstrArgInject(...), ModelFieldInject(model=str)],
+        arg: Annotated[str, ArgsInjectable(...), ModelFieldInject(model=str)],
     ) -> None:
         pass
 
@@ -363,16 +361,5 @@ def test_model_cast1() -> None:
     def func(arg: datetime = ModelFieldInject(model=Model, field="x")) -> int:
         return 42
 
-    errors = check_modefield_types(get_func_args(func), type_cast=[(str, datetime)])
-    assert errors == []
-
-
-def test_model_cast2() -> None:
-    class Model:
-        x: str
-
-    def func(arg: UUID = ModelFieldInject(model=Model, field="x")) -> int:
-        return 42
-
-    errors = check_modefield_types(get_func_args(func), type_cast=[(str, UUID)])
+    errors = check_modefield_types(get_func_args(func), arg_predicate=[validator_check])
     assert errors == []

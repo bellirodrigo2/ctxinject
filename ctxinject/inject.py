@@ -1,11 +1,12 @@
 import asyncio
 import inspect
 from functools import partial
-from typing import Any, Callable, Dict, Iterable, Optional, Type, Union
+from typing import Any, Callable, Container, Dict, Iterable, Optional, Type, Union
 
 from typemapping import VarTypeInfo, get_field_type, get_func_args
 
-from ctxinject.model import ArgsInjectable, CallableInjectable, ModelFieldInject
+from ctxinject.model import CallableInjectable, Injectable, ModelFieldInject
+from ctxinject.validation import get_validator
 
 
 class UnresolvedInjectableError(Exception):
@@ -22,7 +23,20 @@ class UnresolvedInjectableError(Exception):
     ...
 
 
-class AsyncResolver:
+class BaseResolver:
+    """Base class for all synchronous resolvers."""
+
+    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
+        """Execute the resolver function."""
+        raise NotImplementedError(
+            "Subclasses must implement __call__"
+        )  # pragma: no cover
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(...)"  # pragma: no cover
+
+
+class AsyncResolver(BaseResolver):
     """Asynchronous resolver wrapper for optimal performance."""
 
     __slots__ = ("_func",)
@@ -36,20 +50,7 @@ class AsyncResolver:
         return self._func(context)
 
 
-class BaseSyncResolver:
-    """Base class for all synchronous resolvers."""
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Execute the resolver function."""
-        raise NotImplementedError(
-            "Subclasses must implement __call__"
-        )  # pragma: no cover
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(...)"  # pragma: no cover
-
-
-class FuncResolver(BaseSyncResolver):
+class FuncResolver(BaseResolver):
     """Synchronous resolver wrapper from function."""
 
     __slots__ = ("_func",)
@@ -63,7 +64,7 @@ class FuncResolver(BaseSyncResolver):
         return self._func(context)
 
 
-class NameResolver(BaseSyncResolver):
+class NameResolver(BaseResolver):
     """Resolves by argument name from context."""
 
     __slots__ = ("_arg_name",)
@@ -77,7 +78,7 @@ class NameResolver(BaseSyncResolver):
         return context[self._arg_name]
 
 
-class TypeResolver(BaseSyncResolver):
+class TypeResolver(BaseResolver):
     """Resolves by type from context."""
 
     __slots__ = ("_target_type",)
@@ -91,7 +92,7 @@ class TypeResolver(BaseSyncResolver):
         return context[self._target_type]
 
 
-class DefaultResolver(BaseSyncResolver):
+class DefaultResolver(BaseResolver):
     """Resolver that returns a pre-configured default value."""
 
     __slots__ = ("_default_value",)
@@ -105,7 +106,7 @@ class DefaultResolver(BaseSyncResolver):
         return self._default_value
 
 
-class ModelFieldResolver(BaseSyncResolver):
+class ModelFieldResolver(BaseResolver):
     """Resolver that extracts field/method from model instance in context."""
 
     __slots__ = ("_model_type", "_field_name")
@@ -145,6 +146,30 @@ async def wrap_validate_async(
     value = await func(context)
     validated = instance.validate(value, bt)  # Validator always sync
     return validated
+
+
+def wrap_validate(
+    value: BaseResolver, instance: Injectable, arg: VarTypeInfo
+) -> BaseResolver:
+    if isinstance(value, AsyncResolver):
+        validated_func = partial(
+            wrap_validate_async,
+            func=value._func,
+            instance=instance,
+            bt=arg.basetype,
+            name=arg.name,
+        )
+        value = AsyncResolver(validated_func)
+    else:
+        validated_func = partial(
+            wrap_validate_sync,
+            func=value,
+            instance=instance,
+            bt=arg.basetype,
+            name=arg.name,
+        )
+        value = FuncResolver(validated_func)
+    return value
 
 
 async def resolve_mapped_ctx(
@@ -229,7 +254,7 @@ async def resolve_mapped_ctx(
 
 def map_ctx(
     args: Iterable[VarTypeInfo],
-    context: Dict[Union[str, Type[Any]], Any],
+    context: Container[Union[str, Type[Any]]],
     allow_incomplete: bool,
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
@@ -244,19 +269,17 @@ def map_ctx(
     overrides = overrides or {}
 
     for arg in args:
-        instance = arg.getinstance(ArgsInjectable)
+        instance = arg.getinstance(Injectable)
         default_ = instance.default if instance else None
         bt = arg.basetype
-        value: Union[BaseSyncResolver, AsyncResolver, None] = None
+        from_type = arg.basetype
+        value: Optional[BaseResolver] = None
 
         # resolve dependencies
-        if arg.hasinstance(CallableInjectable):
-            callable_instance = arg.getinstance(CallableInjectable)
+        if isinstance(instance, CallableInjectable):
 
             # Apply override without mutating the original object
-            dep_func = overrides.get(
-                callable_instance.default, callable_instance.default
-            )
+            dep_func = overrides.get(instance.default, instance.default)
             # ✅ FIXED: Do NOT mutate callable_instance._default
 
             dep_args = get_func_args(dep_func)
@@ -291,7 +314,9 @@ def map_ctx(
             if isinstance(instance, ModelFieldInject):
                 tgtmodel = instance.model
                 tgt_field = instance.field or arg.name
-                if tgtmodel in context and get_field_type(tgtmodel, tgt_field):
+                modeltype = get_field_type(tgtmodel, tgt_field)
+                if tgtmodel in context and modeltype:
+                    from_type = modeltype
                     value = ModelFieldResolver(
                         model_type=tgtmodel, field_name=tgt_field
                     )
@@ -306,42 +331,14 @@ def map_ctx(
             raise UnresolvedInjectableError(
                 f"Argument '{arg.name}' is incomplete or missing a valid injectable context."
             )
-
         if value is not None:
-            # Check BOTH ArgsInjectable AND CallableInjectable for validation
-            args_instance = arg.getinstance(ArgsInjectable)
-            callable_instance = arg.getinstance(CallableInjectable)
-
-            # Choose which instance to use for validation
-            validation_instance = (
-                args_instance if args_instance is not None else callable_instance
-            )
-
-            if (
-                validate
-                and validation_instance is not None
-                and arg.basetype is not None
-                and validation_instance.has_validate
-            ):
-                # Use type-specific validation wrapper
-                if isinstance(value, AsyncResolver):
-                    validated_func = partial(
-                        wrap_validate_async,
-                        func=value._func,
-                        instance=validation_instance,
-                        bt=arg.basetype,
-                        name=arg.name,
-                    )
-                    value = AsyncResolver(validated_func)
-                else:
-                    validated_func = partial(
-                        wrap_validate_sync,
-                        func=value,
-                        instance=validation_instance,
-                        bt=arg.basetype,
-                        name=arg.name,
-                    )
-                    value = FuncResolver(validated_func)
+            if validate and instance is not None and arg.basetype is not None:
+                if not instance.has_validate:
+                    validation = get_validator(from_type, bt)
+                    if validation:
+                        instance._validator = validation
+                if instance.has_validate:
+                    value = wrap_validate(value, instance, arg)
 
             ctx[arg.name] = value
 
@@ -350,7 +347,7 @@ def map_ctx(
 
 def get_mapped_ctx(
     func: Callable[..., Any],
-    context: Dict[Union[str, Type[Any]], Any],
+    context: Container[Union[str, Type[Any]]],
     allow_incomplete: bool = True,
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
@@ -397,11 +394,11 @@ def get_mapped_ctx(
 
 async def inject_args(
     func: Callable[..., Any],
-    context: Dict[Union[str, Type[Any]], Any],
+    context: Union[Dict[Union[str, Type[Any]], Any], Any],
     allow_incomplete: bool = True,
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
-) -> partial[Any]:
+) -> Callable[..., Any]:
     """
     Inject arguments into function with optimal performance using dependency injection.
 
@@ -498,6 +495,11 @@ async def inject_args(
         - Supports chaining multiple injections on the same function
         - Name-based injection takes precedence over type-based injection
     """
-    mapped_ctx = get_mapped_ctx(func, context, allow_incomplete, validate, overrides)
+    if not isinstance(context, dict):
+        context = {type(context): context}
+    context_list = list(context.keys())
+    mapped_ctx = get_mapped_ctx(
+        func, context_list, allow_incomplete, validate, overrides
+    )
     resolved = await resolve_mapped_ctx(context, mapped_ctx)
     return partial(func, **resolved)

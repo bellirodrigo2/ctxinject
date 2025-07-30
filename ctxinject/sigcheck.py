@@ -1,12 +1,12 @@
 from typemapping import (
     VarTypeInfo,
+    generic_issubclass,
     get_field_type,
     get_func_args,
     get_return_type,
     get_safe_type_hints,
-    is_Annotated,
+    is_annotated_type,
     is_equal_type,
-    safe_issubclass,
 )
 from typing_extensions import (
     Annotated,
@@ -16,7 +16,6 @@ from typing_extensions import (
     List,
     Optional,
     Sequence,
-    Tuple,
     Type,
     get_args,
     get_origin,
@@ -24,6 +23,7 @@ from typing_extensions import (
 )
 
 from ctxinject.model import DependsInject, Injectable, ModelFieldInject
+from ctxinject.validation import validator_check
 
 
 def error_msg(argname: str, msg: str) -> str:
@@ -50,23 +50,18 @@ def check_all_typed(args: List[VarTypeInfo]) -> List[str]:
 
 def check_all_injectables(
     args: List[VarTypeInfo],
-    modeltype: Iterable[type[Any]],
-    generictype: Optional[type[Any]] = None,
+    modeltype: Iterable[Type[Any]],
+    # generictype: Optional[Type[Any]] = None,
 ) -> List[str]:
     """Check that all arguments are injectable using typemapping."""
 
-    def is_injectable(arg: VarTypeInfo, modeltype: Iterable[type[Any]]) -> bool:
+    def is_injectable(arg: VarTypeInfo, modeltype: Iterable[Type[Any]]) -> bool:
         if arg.hasinstance(Injectable):
             return True
         for model in modeltype:
             # ✅ Use typemapping's robust type checking
             if arg.istype(model):
                 return True
-            elif generictype is not None and arg.origin is generictype:
-                if len(arg.args) > 0 and isinstance(arg.args[0], type):
-                    # ✅ Use typemapping's safe_issubclass
-                    if safe_issubclass(arg.args[0], model):
-                        return True
         return False
 
     errors: List[str] = []
@@ -86,15 +81,24 @@ def check_all_injectables(
     return errors
 
 
+ArgCheck = Callable[
+    [
+        ModelFieldInject,
+        Type[Any],
+        Type[Any],
+    ],
+    bool,
+]
+
+
 def check_modefield_types(
     args: List[VarTypeInfo],
-    allowed_models: Optional[List[type[Any]]] = None,
-    type_cast: Optional[List[Tuple[type[Any], Type[Any]]]] = None,
+    allowed_models: Optional[List[Type[Any]]] = None,
+    arg_predicate: Optional[List[ArgCheck]] = None,
 ) -> List[str]:
     """Check model field injection types."""
     errors: List[str] = []
     valid_args: List[VarTypeInfo] = []
-    type_cast = type_cast or []
 
     for arg in args:
         modelfield_inj = arg.getinstance(ModelFieldInject)
@@ -124,9 +128,9 @@ def check_modefield_types(
                     continue
 
             fieldname = modelfield_inj.field or arg.name
-            argtype = get_field_type(modelfield_inj.model, fieldname)
+            modeltype = get_field_type(modelfield_inj.model, fieldname)
 
-            if argtype is None:
+            if modeltype is None:
                 errors.append(
                     error_msg(
                         arg.name,
@@ -135,31 +139,26 @@ def check_modefield_types(
                 )
                 continue
 
-            if (
-                isinstance(arg.basetype, type)
-                and isinstance(argtype, type)
-                and safe_issubclass(
-                    argtype, arg.basetype
-                )  # ✅ Use typemapping's safe_issubclass
-            ):
+            if generic_issubclass(
+                modeltype, arg.basetype
+            ):  # ✅ Use typemapping's generic_issubclass
                 valid_args.append(arg)
                 continue
 
+            arg_predicate = arg_predicate or []
             # ✅ Use typemapping's robust type checking
-            if not arg.istype(argtype):
-                # Check both directions for type_cast
-                if (argtype, arg.basetype) not in type_cast and (
-                    arg.basetype,
-                    argtype,
-                ) not in type_cast:
+            if not arg.istype(modeltype):
+                for check in arg_predicate:
+                    is_valid = check(modelfield_inj, modeltype, arg.basetype)
+                    if is_valid:
+                        break
+                else:
                     errors.append(
                         error_msg(
                             arg.name,
-                            f"has ModelFieldInject, but types does not match. Expected {argtype}, but found {arg.argtype}",
+                            f"has ModelFieldInject, but types does not match. Expected {arg.basetype}, but found {modeltype}",
                         )
                     )
-                    continue
-
             valid_args.append(arg)
         else:
             valid_args.append(arg)
@@ -181,7 +180,7 @@ def check_depends_types(
     2. The lambda is simple (no complex logic)
     """
     errors: List[str] = []
-    deps: list[tuple[str, Optional[type[Any]], Any]] = [
+    deps: list[tuple[str, Optional[Type[Any]], Any]] = [
         (arg.name, arg.basetype, arg.getinstance(tgttype).default)
         for arg in args
         if arg.hasinstance(tgttype)
@@ -210,7 +209,7 @@ def check_depends_types(
                 return_type = hints.get("return")
 
                 # Handle Annotated return types
-                if return_type is not None and is_Annotated(return_type):
+                if return_type is not None and is_annotated_type(return_type):
                     return_type = get_args(return_type)[0]
 
         except Exception:
@@ -301,16 +300,16 @@ def _types_compatible(return_type: Any, expected_type: Any) -> bool:
         return True
 
     # ✅ Use typemapping's safe subclass relationship check
-    if safe_issubclass(return_type, expected_type):
+    if generic_issubclass(return_type, expected_type):
         return True
 
     # Handle Annotated types using typemapping
-    if is_Annotated(expected_type):
+    if is_annotated_type(expected_type):
         expected_args = get_args(expected_type)
         if expected_args:
             return _types_compatible(return_type, expected_args[0])
 
-    if is_Annotated(return_type):
+    if is_annotated_type(return_type):
         return_args = get_args(return_type)
         if return_args:
             return _types_compatible(return_args[0], expected_type)
@@ -358,10 +357,10 @@ def check_single_injectable(args: List[VarTypeInfo]) -> List[str]:
 
 def func_signature_check(
     func: Callable[..., Any],
-    modeltype: Optional[List[type[Any]]] = None,
-    generictype: Optional[type[Any]] = None,
+    modeltype: Optional[List[Type[Any]]] = None,
+    # generictype: Optional[Type[Any]] = None,
     bt_default_fallback: bool = True,
-    type_cast: Optional[List[Tuple[Type[Any], Type[Any]]]] = None,
+    arg_predicate: Optional[List[ArgCheck]] = None,
 ) -> List[str]:
     """
     Check function signature for injection compatibility.
@@ -463,13 +462,15 @@ def func_signature_check(
     typed_errors = check_all_typed(args_list)
     all_errors.extend(typed_errors)
 
-    inj_errors = check_all_injectables(args_list, modeltype, generictype)
+    inj_errors = check_all_injectables(args_list, modeltype)  # , generictype)
     all_errors.extend(inj_errors)
 
     single_errors = check_single_injectable(args_list)
     all_errors.extend(single_errors)
 
-    model_errors = check_modefield_types(args_list, modeltype, type_cast)
+    arg_predicate = arg_predicate or []
+    arg_predicate.append(validator_check)
+    model_errors = check_modefield_types(args_list, modeltype, arg_predicate)
     all_errors.extend(model_errors)
 
     # ✅ LAMBDA-FRIENDLY dependency check

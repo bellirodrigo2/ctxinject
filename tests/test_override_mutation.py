@@ -5,6 +5,8 @@ This test ensures that dependency overrides don't mutate the original
 dependency objects, which is critical for test isolation.
 """
 
+from typing import Tuple
+
 import pytest
 
 from ctxinject.inject import inject_args
@@ -69,7 +71,7 @@ class TestOverrideStateMutation:
 
         async def handler(
             a: str = DependsInject(dep_a), b: str = DependsInject(dep_b)
-        ) -> tuple[str, str]:
+        ) -> Tuple[str, str]:
             return a, b
 
         # Test 1: Override only A

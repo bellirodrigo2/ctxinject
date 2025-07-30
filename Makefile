@@ -1,4 +1,4 @@
-.PHONY: install install_dev test test_coverage lint lint_fix format build clean docs docs_clean docs_serve
+.PHONY: install install_dev test test_coverage test_cov_missing lint lint_fix format build clean docs docs_clean docs_serve
 
 install:
 	@echo "Instaling dependencies..."
@@ -16,6 +16,10 @@ test:
 test_coverage:
 	@echo "Running tests with coverage..."
 	pytest -p no:warnings --cov=ctxinject ./tests
+
+test_cov_missing:
+	@echo "Running tests with missing report coverage..."
+	pytest --cov=ctxinject --cov-report=term-missing
 
 
 lint:
