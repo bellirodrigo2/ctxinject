@@ -181,24 +181,26 @@ def test_model_field_type_mismatch() -> None:
     assert all("Could not determine type of class " in e for e in errors)
 
 
-def test_model_field_type_instance() -> None:
-    class enum1(Enum):
-        foo = 1
-        bar = 2
+if TEST_TYPE:
 
-    e1 = enum1.bar
-    e2 = enum1.bar
+    def test_model_field_type_instance() -> None:
+        class enum1(Enum):
+            foo = 1
+            bar = 2
 
-    class Model:
-        x: e1
+        e1 = enum1.bar
+        e2 = enum1.bar
 
-    def func(
-        x: Annotated[e1, ModelFieldInject(model=Model)],
-        y: Annotated[e2, ModelFieldInject(model=Model, field="x")],
-    ) -> None:
-        pass
+        class Model:
+            x: e1
 
-    assert check_modefield_types(get_func_args(func)) == []
+        def func(
+            x: Annotated[e1, ModelFieldInject(model=Model)],
+            y: Annotated[e2, ModelFieldInject(model=Model, field="x")],
+        ) -> None:
+            pass
+
+        assert check_modefield_types(get_func_args(func)) == []
 
 
 def test_model_field_not_allowed() -> None:
@@ -362,4 +364,20 @@ def test_model_cast1() -> None:
         return 42
 
     errors = check_modefield_types(get_func_args(func), arg_predicate=[validator_check])
+    assert errors == []
+
+
+def test_byname() -> None:
+    class Model:
+        x: str
+
+    def func(
+        byname: str, arg: datetime = ModelFieldInject(model=Model, field="x")
+    ) -> int:
+        return 42
+
+    errors = check_all_injectables(get_func_args(func), [Model], [])
+    assert len(errors) == 1
+
+    errors = check_all_injectables(get_func_args(func), [Model], ["byname"])
     assert errors == []

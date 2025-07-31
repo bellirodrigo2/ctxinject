@@ -13,7 +13,7 @@ from typemapping import get_func_args
 from typing_extensions import Annotated
 
 from ctxinject.inject import UnresolvedInjectableError, inject_args
-from ctxinject.model import ArgsInjectable
+from ctxinject.model import ArgsInjectable, ModelFieldInject
 from tests.conftest import (
     MyModel,
     MyModelField,
@@ -272,3 +272,18 @@ class TestInjectArgs:
         injected = await inject_args(func, ctx)
         result = injected()
         assert result == expected_value
+
+    @pytest.mark.asyncio
+    async def test_single_variable_ctx(self) -> None:
+        class Base:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        def func(base: Base, name: str = ModelFieldInject(Base)) -> Tuple[str, str]:
+            return base.name, name
+
+        val = Base("foobar")
+        injected = await inject_args(func, val)
+        result = injected()
+
+        assert result == ("foobar", "foobar")

@@ -124,18 +124,14 @@ class TestSigcheckEdgeCases:
     def test_lambda_dependency(self) -> None:
         """Test lambda as dependency (no __name__ attribute)."""
 
-        def func_with_lambda(arg: str = DependsInject(lambda: "test")) -> None:
-            pass
-
-        errors = check_depends_types(get_func_args(func_with_lambda))
-        assert errors == []
-
-        def func_with_lambda_path(
-            arg: Path = DependsInject(lambda: Path("./")),
+        def func_with_lambda(
+            arg1: str = DependsInject(lambda: "test"),
+            arg2: int = DependsInject(lambda: 42),
+            arg3: List = DependsInject(lambda: []),
         ) -> None:
             pass
 
-        errors = check_depends_types(get_func_args(func_with_lambda_path))
+        errors = check_depends_types(get_func_args(func_with_lambda))
         assert errors == []
 
     def test_nested_annotated(self) -> None:
@@ -260,7 +256,6 @@ class TestSigcheckImprovements:
     def test_suggestion_context(self) -> None:
         """Test that errors provide context for fixes."""
 
-        from pathlib import Path
 
         def uninjectable_func(path: Path) -> None:  # Path not in modeltype
             pass

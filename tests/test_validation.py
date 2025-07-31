@@ -1,7 +1,6 @@
-import json
 import sys
-from datetime import date, datetime, time, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, time
+from typing import List, Optional
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -228,15 +227,14 @@ class TestExtractType:
     """Test extract_type function."""
 
     def test_extract_regular_type(self):
-        assert extract_type(str) == str
-        assert extract_type(int) == int
+        assert extract_type(str) is str
+        assert extract_type(int) is int
 
     def test_extract_generic_type(self):
-        from typing import List, Optional
 
-        assert extract_type(List[str]) == list
+        assert extract_type(List[str]) is list
         assert (
-            extract_type(Optional[int]) == type(None)
+            extract_type(Optional[int]) is type(None)
             or extract_type(Optional[int]) is not None
         )
 
@@ -347,29 +345,16 @@ class TestPydanticIntegration:
     def test_pydantic_imports(self):
         """Test that Pydantic-specific imports work."""
         try:
-            import pydantic
-
             # If we get here, Pydantic is installed
-            from ctxinject.validation import (
-                IS_PYDANTIC_V2,
-                constrained_any_url,
-                constrained_email,
-                constrained_http_url,
-                constrained_ip_any,
-                get_pydantic_validator,
-                parse_json_model,
-            )
+            from ctxinject.validation import constrained_email
 
             assert constrained_email is not None
-            assert IS_PYDANTIC_V2 is not None
         except ImportError:
             pytest.skip("Pydantic not installed")
 
     def test_pydantic_string_validation(self):
         """Test Pydantic string validation with constraints."""
         try:
-            import pydantic
-
             result = constrained_str(
                 "hello", min_length=3, max_length=10, pattern=r"^h.*"
             )
@@ -390,8 +375,6 @@ class TestPydanticIntegration:
     def test_pydantic_number_validation(self):
         """Test Pydantic number validation."""
         try:
-            import pydantic
-
             result = constrained_num(15, gt=10, lt=20, multiple_of=5)
             assert result == 15
 
@@ -406,8 +389,6 @@ class TestPydanticIntegration:
     def test_pydantic_list_validation(self):
         """Test Pydantic list validation."""
         try:
-            import pydantic
-
             result = constrained_list([1, 2, 3], min_length=2, max_length=5)
             assert result == [1, 2, 3]
 
@@ -422,8 +403,6 @@ class TestPydanticIntegration:
     def test_pydantic_dict_validation(self):
         """Test Pydantic dict validation."""
         try:
-            import pydantic
-
             result = constrained_dict({"a": 1, "b": 2}, min_length=1, max_length=3)
             assert result == {"a": 1, "b": 2}
 
@@ -438,8 +417,6 @@ class TestPydanticIntegration:
     def test_pydantic_email_validation(self):
         """Test Pydantic email validation."""
         try:
-            import pydantic
-
             from ctxinject.validation import constrained_email
 
             result = constrained_email("test@example.com")
@@ -459,8 +436,6 @@ class TestPydanticIntegration:
     def test_pydantic_url_validation(self):
         """Test Pydantic URL validation."""
         try:
-            import pydantic
-
             from ctxinject.validation import constrained_any_url, constrained_http_url
 
             # HTTP URL validation
@@ -483,8 +458,6 @@ class TestPydanticIntegration:
     def test_pydantic_ip_validation(self):
         """Test Pydantic IP address validation."""
         try:
-            import pydantic
-
             from ctxinject.validation import constrained_ip_any
 
             # Valid IPv4
@@ -506,8 +479,6 @@ class TestPydanticIntegration:
     def test_pydantic_uuid_validation(self):
         """Test Pydantic UUID validation."""
         try:
-            import pydantic
-
             uuid_str = "550e8400-e29b-41d4-a716-446655440000"
             result = constrained_uuid(uuid_str)
             assert isinstance(result, UUID)
@@ -521,10 +492,9 @@ class TestPydanticIntegration:
     def test_pydantic_model_parsing(self):
         """Test Pydantic model JSON parsing."""
         try:
-            import pydantic
             from pydantic import BaseModel
 
-            from ctxinject.validation import IS_PYDANTIC_V2, parse_json_model
+            from ctxinject.validation import parse_json_model
 
             class TestModel(BaseModel):
                 name: str
@@ -565,7 +535,6 @@ class TestPydanticIntegration:
     def test_get_pydantic_validator(self):
         """Test the get_pydantic_validator function."""
         try:
-            import pydantic
             from pydantic import BaseModel
 
             from ctxinject.validation import get_pydantic_validator, parse_json_model
@@ -605,7 +574,6 @@ class TestPydanticIntegration:
     def test_pydantic_in_arg_proc(self):
         """Test that Pydantic validators are registered in arg_proc."""
         try:
-            import pydantic
             from pydantic import AnyUrl, EmailStr, HttpUrl, IPvAnyAddress
 
             from ctxinject.validation import arg_proc
@@ -622,8 +590,6 @@ class TestPydanticIntegration:
     def test_pydantic_validator_in_validators_list(self):
         """Test that get_pydantic_validator is in validators list."""
         try:
-            import pydantic
-
             from ctxinject.validation import get_pydantic_validator, validators
 
             assert get_pydantic_validator in validators
@@ -634,8 +600,6 @@ class TestPydanticIntegration:
     def test_pydantic_caching(self):
         """Test that Pydantic adapters are cached properly."""
         try:
-            import pydantic
-
             from ctxinject.validation import get_number_adapter, get_string_adapter
 
             # Test string adapter caching
@@ -728,11 +692,9 @@ class TestEdgeCases:
         mock_type.__class__ = MagicMock()
         mock_type.__class__.__name__ = "GenericAlias"
 
-        from typing import get_origin
-
         with patch("ctxinject.validation.get_origin", return_value=list):
             result = extract_type(mock_type)
-            assert result == list
+            assert result is list
 
 
 # Integration tests
@@ -775,7 +737,6 @@ class TestImportFallbackSimple:
     def test_fallback_with_subprocess(self):
         """Test the ImportError fallback by running code in a subprocess without pydantic."""
         import subprocess
-        import sys
 
         # Python code to run in subprocess
         test_code = """
@@ -825,8 +786,6 @@ class TestImportFallback:
 
     def test_import_error_fallback(self):
         """Test the except ImportError block (lines 357-409)."""
-        import importlib
-        import sys
         from unittest.mock import patch
 
         # Save original state
@@ -868,6 +827,10 @@ class TestImportFallback:
 
                 result = val_fallback.constrained_list([1, 2, 3], min_length=2)
                 assert result == [1, 2, 3]
+                with pytest.raises(ValueError):
+                    result = val_fallback.constrained_list([1], min_length=2)
+                with pytest.raises(ValueError):
+                    result = val_fallback.constrained_list([1, 2, 3], max_length=2)
 
                 result = val_fallback.constrained_dict({"a": 1, "b": 2}, max_length=3)
                 assert result == {"a": 1, "b": 2}

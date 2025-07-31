@@ -211,7 +211,6 @@ def validator_check(
 
 
 try:
-    from pydantic import VERSION as PYDANTIC_VERSION
     from pydantic import (
         AnyUrl,
         BaseModel,
@@ -342,15 +341,11 @@ try:
             return parse_json_model
         return None
 
-    IS_PYDANTIC_V2 = PYDANTIC_VERSION.startswith("2.")
-
     def parse_json_model(
         json_str: Union[str, bytes], basetype: Type[BaseModel], **kwargs: Any
     ) -> Any:
         """Parse JSON to Pydantic model."""
-        if IS_PYDANTIC_V2:
-            return basetype.model_validate_json(json_str, **kwargs)
-        return basetype.parse_raw(json_str, **kwargs)
+        return basetype.model_validate_json(json_str, **kwargs)
 
     validators.append(get_pydantic_validator)
 

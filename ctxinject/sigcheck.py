@@ -4,23 +4,8 @@ from typemapping import (
     get_field_type,
     get_func_args,
     get_return_type,
-    get_safe_type_hints,
-    is_annotated_type,
-    is_equal_type,
 )
-from typing_extensions import (
-    Annotated,
-    Any,
-    Callable,
-    Iterable,
-    List,
-    Optional,
-    Sequence,
-    Type,
-    get_args,
-    get_origin,
-    get_type_hints,
-)
+from typing_extensions import Any, Callable, Iterable, List, Optional, Sequence, Type
 
 from ctxinject.model import DependsInject, Injectable, ModelFieldInject
 from ctxinject.validation import validator_check
@@ -51,15 +36,18 @@ def check_all_typed(args: List[VarTypeInfo]) -> List[str]:
 def check_all_injectables(
     args: List[VarTypeInfo],
     modeltype: Iterable[Type[Any]],
-    # generictype: Optional[Type[Any]] = None,
+    bynames: Optional[Iterable[str]] = None,
 ) -> List[str]:
     """Check that all arguments are injectable using typemapping."""
 
-    def is_injectable(arg: VarTypeInfo, modeltype: Iterable[Type[Any]]) -> bool:
+    bynames = bynames or []
+
+    def is_injectable(arg: VarTypeInfo) -> bool:
         if arg.hasinstance(Injectable):
             return True
+        if arg.name in bynames:
+            return True
         for model in modeltype:
-            # ✅ Use typemapping's robust type checking
             if arg.istype(model):
                 return True
         return False
@@ -68,7 +56,7 @@ def check_all_injectables(
     valid_args: List[VarTypeInfo] = []
 
     for arg in args:
-        if not is_injectable(arg, modeltype):
+        if not is_injectable(arg):
             errors.append(
                 error_msg(arg.name, f"of type '{arg.basetype}' cannot be injected.")
             )
@@ -112,20 +100,17 @@ def check_modefield_types(
                 )
                 continue
 
-            if allowed_models is not None:
-                if len(allowed_models) == 0 or not any(
-                    [
-                        issubclass(modelfield_inj.model, model)
-                        for model in allowed_models
-                    ]
-                ):
-                    errors.append(
-                        error_msg(
-                            arg.name,
-                            f"has ModelFieldInject but type is not allowed. Allowed: {[model.__name__ for model in allowed_models]}, Found: {arg.argtype}",
-                        )
+            if (
+                allowed_models is not None
+                and modelfield_inj.model not in allowed_models
+            ):
+                errors.append(
+                    error_msg(
+                        arg.name,
+                        f"has ModelFieldInject but type is not allowed. Allowed: {[model.__name__ for model in allowed_models]}, Found: {arg.argtype}",
                     )
-                    continue
+                )
+                continue
 
             fieldname = modelfield_inj.field or arg.name
             modeltype = get_field_type(modelfield_inj.model, fieldname)
@@ -144,15 +129,14 @@ def check_modefield_types(
             ):  # ✅ Use typemapping's generic_issubclass
                 valid_args.append(arg)
                 continue
-
-            arg_predicate = arg_predicate or []
-            # ✅ Use typemapping's robust type checking
-            if not arg.istype(modeltype):
-                for check in arg_predicate:
-                    is_valid = check(modelfield_inj, modeltype, arg.basetype)
-                    if is_valid:
-                        break
-                else:
+            else:
+                arg_predicate = arg_predicate or []
+                if not any(
+                    [
+                        check(modelfield_inj, modeltype, arg.basetype)
+                        for check in arg_predicate
+                    ]
+                ):
                     errors.append(
                         error_msg(
                             arg.name,
@@ -198,88 +182,20 @@ def check_depends_types(
         # Get function name for better error messages
         func_name = getattr(dep_func, "__name__", str(dep_func))
 
-        # Try to get return type annotation using typemapping
-        try:
-            # ✅ Use typemapping's robust type hints resolution
-            return_type = get_return_type(dep_func)
+        # ✅ Use typemapping's robust type hints resolution
+        return_type = get_return_type(dep_func)
 
-            # If typemapping couldn't determine it, try manual inspection
-            if return_type is None:
-                hints = get_safe_type_hints(dep_func)
-                return_type = hints.get("return")
-
-                # Handle Annotated return types
-                if return_type is not None and is_annotated_type(return_type):
-                    return_type = get_args(return_type)[0]
-
-        except Exception:
-            # Fallback to basic get_type_hints
-            try:
-                return_type = get_type_hints(dep_func).get("return")
-                if get_origin(return_type) is Annotated:
-                    return_type = get_args(return_type)[0]
-            except Exception:
-                return_type = None
-
-        # ✅ LAMBDA-FRIENDLY LOGIC (only for simple lambdas)
         if return_type is None:
-            # No return type annotation found
-
-            if func_name == "<lambda>":
-                # Check if lambda has arguments
-                try:
-                    import inspect
-
-                    sig = inspect.signature(dep_func)
-                    has_args = len(sig.parameters) > 0
-                except Exception:
-                    has_args = True  # Assume complex if can't analyze
-
-                if has_args:
-                    # Lambda with arguments - require proper function with annotation
-                    errors.append(
-                        error_msg(
-                            arg_name,
-                            f"Lambda with arguments requires return type annotation. "
-                            f"Use a named function: def func(arg) -> {dep_type.__name__ if dep_type else 'YourType'}: ...",
-                        )
-                    )
-                    continue
-                else:
-                    # Simple lambda without arguments
-                    if dep_type is not None and dep_type is not Any:
-                        # We know what type is expected, assume lambda returns correct type
-                        # This covers: arg: int = DependsInject(lambda: 42)
-                        continue
-                    else:
-                        errors.append(
-                            error_msg(
-                                arg_name,
-                                "Lambda dependency has no return type annotation and target type is unknown. "
-                                "Add return type: lambda: value -> YourType, or use a named function.",
-                            )
-                        )
-                        continue
-            else:
-                # Named function without annotation - be more strict
-                if dep_type is not None:
-                    errors.append(
-                        error_msg(
-                            arg_name,
-                            "Depends Return should a be type, but None was found.",
-                        )
-                    )
-                else:
-                    errors.append(
-                        error_msg(
-                            arg_name,
-                            "Depends Return should a be type, but None was found.",
-                        )
-                    )
-                continue
+            errors.append(
+                error_msg(
+                    arg_name,
+                    "Depends Return should a be type, but None was found.",
+                )
+            )
+            continue
 
         # ✅ TYPE COMPATIBILITY CHECK
-        if not _types_compatible(return_type, dep_type):
+        if not generic_issubclass(return_type, dep_type):
             errors.append(
                 error_msg(
                     arg_name,
@@ -288,45 +204,6 @@ def check_depends_types(
             )
 
     return errors
-
-
-def _types_compatible(return_type: Any, expected_type: Any) -> bool:
-    """Check if return type is compatible with expected type using typemapping."""
-    if return_type is None or expected_type is None:
-        return return_type == expected_type
-
-    # ✅ Use typemapping's robust type equality check
-    if is_equal_type(return_type, expected_type):
-        return True
-
-    # ✅ Use typemapping's safe subclass relationship check
-    if generic_issubclass(return_type, expected_type):
-        return True
-
-    # Handle Annotated types using typemapping
-    if is_annotated_type(expected_type):
-        expected_args = get_args(expected_type)
-        if expected_args:
-            return _types_compatible(return_type, expected_args[0])
-
-    if is_annotated_type(return_type):
-        return_args = get_args(return_type)
-        if return_args:
-            return _types_compatible(return_args[0], expected_type)
-
-    # Handle Union/Optional types
-    from typing_extensions import Union
-
-    if get_origin(expected_type) is Union:
-        union_args = get_args(expected_type)
-        # For Optional[X], accept X
-        if len(union_args) == 2 and type(None) in union_args:
-            non_none_type = next(arg for arg in union_args if arg is not type(None))
-            return _types_compatible(return_type, non_none_type)
-        # For general Union, check if return_type matches any
-        return any(_types_compatible(return_type, arg) for arg in union_args)
-
-    return False
 
 
 def check_single_injectable(args: List[VarTypeInfo]) -> List[str]:
