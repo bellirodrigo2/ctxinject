@@ -1,4 +1,4 @@
-.PHONY: install install_dev test test_coverage test_cov_missing lint lint_fix format build clean docs docs_clean docs_serve
+.PHONY: install install_dev test test_coverage test_cov_missing lint lint_fix format build clean docs docs_clean docs_serve upload_pypi
 
 install:
 	@echo "Instaling dependencies..."
@@ -35,14 +35,17 @@ format:
 	black ctxinject
 	isort ctxinject
 
-build:
-	@echo "Building package ..."
-	python -m build
-
 clean:
 	@echo "Cleaning cache and build/dist related files..."
 	@python -c "import shutil, glob, os; [shutil.rmtree(d, ignore_errors=True) for d in ['dist', 'build', '.mypy_cache', '.pytest_cache', '.ruff_cache'] + glob.glob('*.egg-info')]; [shutil.rmtree(os.path.join(r, d), ignore_errors=True) for r, ds, _ in os.walk('.') for d in ds if d == '__pycache__']"
 
+build: clean
+	@echo "Building package ..."
+	python -m build
+
+upload_pypi: build
+	@echo "Uploading package to pypi ..."
+	twine upload dist/*
 docs:
 	@echo "Building documentation..."
 	sphinx-build -b html docs/source docs/build/html

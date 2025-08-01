@@ -4,7 +4,6 @@ dynamic = ["version"]
 description = "Context-based dependency injection for Python"
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
 keywords = ["dependency", "injection", "context", "async"]
 authors = [
     { name = "rodbell", email = "bellirodrigo2@gmail.com" },
@@ -112,7 +111,7 @@ filterwarnings = [
 # ============================================================================
 
 [tool.coverage.run]
-source = ["src"]
+source = ["ctxinject"]
 branch = true
 omit = [
     "*/tests/*",
@@ -168,7 +167,7 @@ line_length = 88
 include_trailing_comma = true
 known_first_party = ["ctxinject"]
 known_third_party = ["typemapping", "pytest", "pydantic", "orjson", "dateutil"]
-src_paths = ["src", "tests"]
+src_paths = ["ctxinject", "tests"]
 
 # ============================================================================
 # LINTING WITH FLAKE8 (configured here for reference, uses setup.cfg)
