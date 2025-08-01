@@ -73,10 +73,6 @@ from .sigcheck import func_signature_check
 # Validation utilities
 from .validation import get_validator
 
-__version__ = "0.1.2"
-__author__ = "rodbell"
-__license__ = "MIT"
-
 __all__ = [
     # Main injection functions
     "inject_args",

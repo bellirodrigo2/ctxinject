@@ -95,6 +95,11 @@ async def main():
     result = injected_func()
     print(result)  # All dependencies automatically injected!
 
+    def mocked_get_db()->str:
+        return 'test'
+
+    injected_func = await inject_args(process_http, context, {get_db: mocked_get_db})
+    result = injected_func() # get_db mocked!
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -120,13 +125,13 @@ from ctxinject.inject import inject_args
 from ctxinject.model import ArgsInjectable
 
 def greet(
-    name: str = ArgsInjectable(...),  # Required
-    count: int = ArgsInjectable(1)    # Optional with default
+    name: str,
+    count: int = ArgsInjectable(5)    # Optional with default
 ):
     return f"Hello {name}! (x{count})"
 
 # Inject by name and type
-context = {"name": "Alice", int: 5}
+context = {"name": "Alice"}
 injected = await inject_args(greet, context)
 result = injected()  # "Hello Alice! (x5)"
 ```
