@@ -198,7 +198,8 @@ class TestSigcheckStress:
 
         # Dynamically create function with 50 arguments
         arg_list = []
-        for i in range(50):
+        n = 10_000
+        for i in range(n):
             arg_list.append(f"arg{i}: str = Injectable()")
 
         func_code = f"""
@@ -217,7 +218,7 @@ def many_args_func({', '.join(arg_list)}) -> None:
         errors = func_signature_check(func)
         end = time.perf_counter()
         assert errors == []
-        print(f"50 args check took {end - start:.4f}s, errors: {len(errors)}")
+        print(f"{n} args check took {end - start:.4f}s, errors: {len(errors)}")
 
     def test_error_recovery(self) -> None:
         """Test that system recovers gracefully from multiple errors."""
@@ -255,7 +256,6 @@ class TestSigcheckImprovements:
 
     def test_suggestion_context(self) -> None:
         """Test that errors provide context for fixes."""
-
 
         def uninjectable_func(path: Path) -> None:  # Path not in modeltype
             pass

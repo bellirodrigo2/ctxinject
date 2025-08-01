@@ -143,7 +143,7 @@ def constrained_json(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     try:
-        return json.loads(value)
+        return json.loads(value)  # type: ignore
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED
 
@@ -153,7 +153,7 @@ def constrained_bytejson(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     try:
-        return orjson.loads(value)
+        return orjson.loads(value)  # type: ignore
     except orjson.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED (consistency)
 
@@ -184,7 +184,7 @@ def func_arg_validator(
 
     modeltype = extract_type(modeltype)
     argtype = extract_type(argtype)
-    return arg_proc.get((modeltype, argtype), None)
+    return arg_proc.get((modeltype, argtype), None)  # type: ignore
 
 
 validators: List[InjectFunc] = [func_arg_validator]
@@ -242,7 +242,7 @@ try:
             kwargs.get("max_length"),
             kwargs.get("pattern"),
         )
-        return adapter.validate_python(value)
+        return adapter.validate_python(value)  # type: ignore
 
     @lru_cache(maxsize=256)
     def get_number_adapter(
@@ -270,7 +270,7 @@ try:
             kwargs.get("le"),
             kwargs.get("multiple_of"),
         )
-        return adapter.validate_python(value)
+        return adapter.validate_python(value)  # type: ignore
 
     @lru_cache(maxsize=256)
     def get_list_adapter(
@@ -289,7 +289,7 @@ try:
             kwargs.get("min_length"),
             kwargs.get("max_length"),
         )
-        return adapter.validate_python(value)
+        return adapter.validate_python(value)  # type: ignore
 
     @lru_cache(maxsize=256)
     def get_dict_adapter(
@@ -308,7 +308,7 @@ try:
             kwargs.get("min_length"),
             kwargs.get("max_length"),
         )
-        return adapter.validate_python(value)
+        return adapter.validate_python(value)  # type: ignore
 
     @lru_cache(maxsize=256)
     def get_str_type_adapter(btype: Type[Any]) -> TypeAdapter[Any]:
@@ -397,7 +397,7 @@ except ImportError:
 
         return value
 
-    def constrained_uuid(
+    def constrained_uuid(  # type: ignore
         value: str,
         **kwargs: Any,
     ) -> UUID:

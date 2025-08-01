@@ -32,8 +32,8 @@ lint_fix:
 
 format:
 	@echo "Formatting code (black e isort)..."
-	black .
-	isort .
+	black ctxinject
+	isort ctxinject
 
 build:
 	@echo "Building package ..."

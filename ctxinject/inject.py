@@ -154,9 +154,9 @@ def wrap_validate(
     if isinstance(value, AsyncResolver):
         validated_func = partial(
             wrap_validate_async,
-            func=value._func,
+            func=value._func,  # type: ignore
             instance=instance,
-            bt=arg.basetype,
+            bt=arg.basetype,  # type: ignore
             name=arg.name,
         )
         value = AsyncResolver(validated_func)
@@ -165,7 +165,7 @@ def wrap_validate(
             wrap_validate_sync,
             func=value,
             instance=instance,
-            bt=arg.basetype,
+            bt=arg.basetype,  # type: ignore
             name=arg.name,
         )
         value = FuncResolver(validated_func)
@@ -334,7 +334,7 @@ def map_ctx(
         if value is not None:
             if validate and instance is not None and arg.basetype is not None:
                 if not instance.has_validate:
-                    validation = get_validator(from_type, bt)
+                    validation = get_validator(from_type, bt)  # type: ignore
                     if validation:
                         instance._validator = validation
                 if instance.has_validate:

@@ -22,30 +22,16 @@ from ctxinject.sigcheck import func_signature_check
 # =============================================================================
 
 
-def validate_positive(value: int, **kwargs: Any) -> int:
-    """Example validator that ensures value is positive."""
-    if value < 0:
-        raise ValueError(f"Value {value} must be positive")
-    return value
-
-
-def validate_non_empty(value: str, **kwargs: Any) -> str:
-    """Example validator that ensures string is not empty."""
-    if not value.strip():
-        raise ValueError("String cannot be empty")
-    return value.strip()
-
-
 # Example function using ArgsInjectable
 def process_order(
     # Required parameter (no default)
-    customer_id: Annotated[str, ArgsInjectable(...)],
+    customer_id: str,
     # Optional with default value
-    quantity: Annotated[int, ArgsInjectable(1)],
+    quantity: int,
     # With validation
-    price: Annotated[float, ArgsInjectable(0.0, validate_positive)],
+    price: Annotated[float, ArgsInjectable(0.0, ge=0.0)],
     # String with validation
-    product_name: Annotated[str, ArgsInjectable("Default Product", validate_non_empty)],
+    product_name: Annotated[str, ArgsInjectable("Default Product", min_length=0)],
 ) -> Dict[Any, Any]:
     """Process an order with injected dependencies."""
     total = quantity * price
@@ -248,8 +234,8 @@ async def example_inject_args() -> None:
     # Function combining all injection types
     def complex_operation(
         # ArgsInjectable
-        operation_id: Annotated[str, ArgsInjectable(...)],
-        retry_count: Annotated[int, ArgsInjectable(3)],
+        operation_id: str,
+        retry_count: Annotated[int, ArgsInjectable(default=3)],
         # ModelFieldInject
         user_perms: Annotated[
             List[str], ModelFieldInject(UserService, "get_permissions")
@@ -331,24 +317,23 @@ async def example_advanced_resolution() -> None:
 def example_signature_validation() -> None:
     """Demonstrate function signature validation."""
 
-    print("\n=== Signature Validation Examples ===")
-
     # Valid function
     def valid_func(
-        name: Annotated[str, ArgsInjectable(...)],
+        name: str,
         count: Annotated[int, ArgsInjectable(42)],
     ) -> str:
         return f"{name}: {count}"
 
-    errors = func_signature_check(valid_func)
-    print(f"Valid function errors: {errors}")  # Should be empty
+    errors = func_signature_check(valid_func, bynames=["name"])
+    assert errors == [], "Valid function should have no errors"
 
     # Invalid function - missing type annotations
     def invalid_func(untyped_param, count: int = ArgsInjectable(1)) -> str:  # type: ignore
         return f"test: {count}"
 
     errors = func_signature_check(invalid_func)
-    print(f"Invalid function errors: {errors}")
+    assert len(errors) == 1
+    assert "has no type definition" in errors[0]
 
     # Function with model types
     def model_func(
@@ -358,7 +343,7 @@ def example_signature_validation() -> None:
         return "test"
 
     errors = func_signature_check(model_func, modeltype=[DatabaseConfig])
-    print(f"Model function errors: {errors}")
+    assert errors == []
 
     # Function with dependency issues
     def bad_deps_func(
@@ -369,7 +354,8 @@ def example_signature_validation() -> None:
         return value
 
     errors = func_signature_check(bad_deps_func)
-    print(f"Bad dependencies errors: {errors}")
+    assert len(errors) == 1
+    assert "but None was found." in errors[0]
 
 
 # =============================================================================

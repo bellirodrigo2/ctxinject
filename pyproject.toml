@@ -1,39 +1,209 @@
+# pyproject.toml - Unified configuration for ctxinject
+
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "ctxinject"
-version = "0.1.1"
-description = ""
-authors = [{ name = "rodbell", email = "bellirodrigo2@gmail.com" }]
+dynamic = ["version"]
+description = "Context-based dependency injection for Python"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [
-    "python-dateutil>=2.9.0.post0",
-    "typing-extensions>=4.13.2",
-    "typemapping>=0.1.2",
-    "orjson"
+license = "MIT"
+keywords = ["dependency", "injection", "context", "async"]
+authors = [
+    { name = "Your Name", email = "your.email@example.com" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",  
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
 ]
 
+# Core dependencies (always required)
+dependencies = [
+    "typemapping>=0.1.0",
+    "typing-extensions>=4.0.0",
+    "orjson>=3.8.0",
+    "python-dateutil>=2.8.0",
+]
 
 [project.optional-dependencies]
+# Development dependencies (includes pydantic for 100% test coverage)
 dev = [
-    "black>=23.1.0",
-    "isort>=5.11.5",
-    "ruff>=0.11.7",
-    "mypy>=1.10.0",
-    "types-python-dateutil",
     "pytest>=7.0.0",
-    "pytest-asyncio",
-    "pytest-cov",
-    "sphinx>=7.0.0",
-    "sphinx-rtd-theme>=2.0.0",
-    "sphinx-autodoc-typehints>=2.0.0",
-    "pydantic>=2.0",
-    "pydantic[email]"
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "mypy>=1.0.0",
+    "black>=22.0.0",
+    "isort>=5.0.0",
+    "flake8>=5.0.0",
+    "pydantic>=2.0.0",  # For full test coverage
 ]
+
+# Enhanced validation with Pydantic (optional for end users)
 pydantic = [
-    "pydantic>=2.0",
-    "pydantic[email]"
+    "pydantic>=2.0.0",
+]
+
+# Full package
+full = ["ctxinject[dev,pydantic]"]
+
+[project.urls]
+Documentation = "https://github.com/yourusername/ctxinject#readme"
+Issues = "https://github.com/yourusername/ctxinject/issues"
+Source = "https://github.com/yourusername/ctxinject"
+
+# ============================================================================
+# HATCHLING BUILD CONFIGURATION
+# ============================================================================
+
+[tool.hatch.version]
+path = "src/ctxinject/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests", 
+    "/mypy_injectable_plugin.py",
+    "/ctxinject.pyi",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ctxinject"]
+artifacts = [
+    "mypy_injectable_plugin.py",
+    "ctxinject.pyi",
+]
+
+# ============================================================================
+# TESTING WITH PYTEST
+# ============================================================================
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config", 
+    "--color=yes",
+    "--durations=10",
+    "--cov=ctxinject",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "unit: Unit tests that test individual components in isolation",
+    "integration: Integration tests that test component interactions", 
+    "async_test: Tests that involve async functionality",
+    "slow: Tests that take longer to run (>1 second)",
+    "performance: Performance and benchmarking tests",
+    "pydantic: Tests that specifically test pydantic features",
+]
+asyncio_mode = "auto"
+minversion = "6.0"
+timeout = 300
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# ============================================================================
+# CODE COVERAGE
+# ============================================================================
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/mypy_injectable_plugin.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstract",
+]
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# ============================================================================
+# CODE FORMATTING WITH BLACK
+# ============================================================================
+
+[tool.black]
+line-length = 88
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.eggs
+  | \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# ============================================================================
+# IMPORT SORTING WITH ISORT
+# ============================================================================
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+include_trailing_comma = true
+known_first_party = ["ctxinject"]
+known_third_party = ["typemapping", "pytest", "pydantic", "orjson", "dateutil"]
+src_paths = ["src", "tests"]
+
+# ============================================================================
+# LINTING WITH FLAKE8 (configured here for reference, uses setup.cfg)
+# ============================================================================
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build", 
+    "dist",
+    ".venv",
+    ".mypy_cache",
+    ".pytest_cache",
+]
+max-complexity = 10
+per-file-ignores = [
+    "__init__.py:F401",
+    "tests/*:S101",
 ]

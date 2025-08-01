@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from typemapping import (
     VarTypeInfo,
     generic_issubclass,
@@ -48,7 +50,7 @@ def check_all_injectables(
         if arg.name in bynames:
             return True
         for model in modeltype:
-            if arg.istype(model):
+            if arg.isequal(model):
                 return True
         return False
 
@@ -125,7 +127,7 @@ def check_modefield_types(
                 continue
 
             if generic_issubclass(
-                modeltype, arg.basetype
+                modeltype, arg.basetype  # type: ignore
             ):  # ✅ Use typemapping's generic_issubclass
                 valid_args.append(arg)
                 continue
@@ -133,7 +135,7 @@ def check_modefield_types(
                 arg_predicate = arg_predicate or []
                 if not any(
                     [
-                        check(modelfield_inj, modeltype, arg.basetype)
+                        check(modelfield_inj, modeltype, arg.basetype)  # type: ignore
                         for check in arg_predicate
                     ]
                 ):
@@ -164,8 +166,8 @@ def check_depends_types(
     2. The lambda is simple (no complex logic)
     """
     errors: List[str] = []
-    deps: list[tuple[str, Optional[Type[Any]], Any]] = [
-        (arg.name, arg.basetype, arg.getinstance(tgttype).default)
+    deps: List[Tuple[str, Optional[Type[Any]], Any]] = [
+        (arg.name, arg.basetype, arg.getinstance(tgttype).default)  # type: ignore
         for arg in args
         if arg.hasinstance(tgttype)
     ]
@@ -195,7 +197,7 @@ def check_depends_types(
             continue
 
         # ✅ TYPE COMPATIBILITY CHECK
-        if not generic_issubclass(return_type, dep_type):
+        if not generic_issubclass(return_type, dep_type):  # type: ignore
             errors.append(
                 error_msg(
                     arg_name,
@@ -235,7 +237,7 @@ def check_single_injectable(args: List[VarTypeInfo]) -> List[str]:
 def func_signature_check(
     func: Callable[..., Any],
     modeltype: Optional[List[Type[Any]]] = None,
-    # generictype: Optional[Type[Any]] = None,
+    bynames: Optional[Iterable[str]] = None,
     bt_default_fallback: bool = True,
     arg_predicate: Optional[List[ArgCheck]] = None,
 ) -> List[str]:
@@ -328,7 +330,7 @@ def func_signature_check(
         args: Sequence[VarTypeInfo] = get_func_args(
             func, bt_default_fallback=bt_default_fallback
         )
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         return [f"Could not analyze function signature: {e}"]
 
     # Convert to list for in-place modification
@@ -339,7 +341,7 @@ def func_signature_check(
     typed_errors = check_all_typed(args_list)
     all_errors.extend(typed_errors)
 
-    inj_errors = check_all_injectables(args_list, modeltype)  # , generictype)
+    inj_errors = check_all_injectables(args_list, modeltype, bynames)  # , generictype)
     all_errors.extend(inj_errors)
 
     single_errors = check_single_injectable(args_list)
