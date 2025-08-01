@@ -41,12 +41,17 @@ dev = [
     "black>=22.0.0",
     "isort>=5.0.0",
     "flake8>=5.0.0",
+    "ruff>=0.11.10",
+    "twine",
+    "build",
     "pydantic>=2.0.0",  # For full test coverage
+    "pydantic[email]>=2.0.0"
 ]
 
 # Enhanced validation with Pydantic (optional for end users)
 pydantic = [
     "pydantic>=2.0.0",
+    "pydantic[email]>=2.0.0"
 ]
 
 # Full package
