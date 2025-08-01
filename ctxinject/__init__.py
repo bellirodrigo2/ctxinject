@@ -51,8 +51,6 @@ Examples:
 """
 
 # Core injection functionality
-from typing import Any, Dict
-
 from .inject import (
     UnresolvedInjectableError,
     get_mapped_ctx,
@@ -75,7 +73,7 @@ from .sigcheck import func_signature_check
 # Validation utilities
 from .validation import get_validator
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 __author__ = "rodbell"
 __license__ = "MIT"
 
