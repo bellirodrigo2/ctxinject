@@ -97,25 +97,3 @@ __all__ = [
     "UnresolvedInjectableError",
     # Plugin availability flag
 ]
-
-
-# Package metadata for introspection
-PACKAGE_INFO: Dict[str, Any] = {
-    "name": "ctxinject",
-    "version": __version__,
-    "description": "Advanced dependency injection with MyPy support",
-    "features": [
-        "Type-safe dependency injection",
-        "Async/await support",
-        "Custom Injectable subclasses",
-        "Validation and type conversion",
-        "MyPy plugin for static typing",
-        "Model field injection",
-        "Function dependency injection",
-    ],
-}
-
-
-def get_package_info() -> Dict[str, Any]:
-    """Get package information and status."""
-    return PACKAGE_INFO.copy()  # pragma: no cover
