@@ -96,12 +96,11 @@ __all__ = [
     # Exceptions
     "UnresolvedInjectableError",
     # Plugin availability flag
-    "HAS_MYPY_PLUGIN",
 ]
 
 
 # Package metadata for introspection
-PACKAGE_INFO = {
+PACKAGE_INFO: Dict[str, Any] = {
     "name": "ctxinject",
     "version": __version__,
     "description": "Advanced dependency injection with MyPy support",
