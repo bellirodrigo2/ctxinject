@@ -103,7 +103,7 @@ def test_check_all_injectable() -> None:
     assert (
         check_all_injectables(
             get_func_args(func2_inner),
-            [Path, MyPath, AsyncIterator[MyPath], AsyncIterator[Path]],
+            [Path, AsyncIterator[Path]],
         )
         == []
     )

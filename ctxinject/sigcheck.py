@@ -49,10 +49,7 @@ def check_all_injectables(
             return True
         if arg.name in bynames:
             return True
-        for model in modeltype:
-            if arg.isequal(model):
-                return True
-        return False
+        return any([generic_issubclass(arg.basetype, model) for model in modeltype])
 
     errors: List[str] = []
     valid_args: List[VarTypeInfo] = []

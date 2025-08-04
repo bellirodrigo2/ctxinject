@@ -26,6 +26,9 @@ __pycache__/
 env/
 venv/
 
+#posts
+post_reddit
+
 # VS Code settings
 .vscode/
 
