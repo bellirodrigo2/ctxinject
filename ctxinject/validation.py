@@ -201,13 +201,11 @@ def get_validator(
 
 
 def validator_check(
-    modelfield_inj: ModelFieldInject,
+    _: ModelFieldInject,
     modeltype: Type[Any],
     basetype: Type[Any],
 ) -> bool:
-    if not modelfield_inj.has_validate or bool(get_validator(modeltype, basetype)):
-        return True
-    return False
+    return bool(get_validator(modeltype, basetype))
 
 
 try:

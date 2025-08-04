@@ -280,13 +280,6 @@ class TestValidatorCheck:
         # When has_validate is False but a validator exists, returns True
         assert validator_check(mock_inj, str, date) is True
 
-    def test_has_validate_false_no_validator(self):
-        mock_inj = MagicMock(spec=ModelFieldInject)
-        mock_inj.has_validate = False
-        # Based on the logic: if not has_validate or bool(get_validator(...))
-        # When has_validate is False, the condition is True regardless of validator
-        assert validator_check(mock_inj, list, set) is True
-
     def test_both_conditions_false(self):
         # To get False, we need has_validate=True AND no validator exists
         mock_inj = MagicMock(spec=ModelFieldInject)
@@ -715,9 +708,6 @@ class TestIntegration:
 
         # Should return True because str->date has a validator
         assert validator_check(model_inject, str, date) is True
-
-        # Should return True even when no validator exists (because has_validate is False by default)
-        assert validator_check(model_inject, list, set) is True
 
         # Test with has_validate = True and no validator
         # We need to create a ModelFieldInject with a validator to make has_validate True

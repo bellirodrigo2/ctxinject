@@ -71,7 +71,7 @@ from .model import (
 from .sigcheck import func_signature_check
 
 # Validation utilities
-from .validation import get_validator
+from .validation import arg_proc, get_validator
 
 __all__ = [
     # Main injection functions
@@ -86,6 +86,7 @@ __all__ = [
     "ModelFieldInject",
     # Utilities
     "get_validator",
+    "arg_proc",
     "func_signature_check",
     # Exceptions
     "UnresolvedInjectableError",
