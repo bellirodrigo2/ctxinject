@@ -96,7 +96,7 @@ def test_check_all_injectable() -> None:
         arg5: AsyncIterator[MyPath],
         extra: AsyncIterator[Path],
         argn: datetime = ArgsInjectable(...),
-        dep: Any = DependsInject(get_db),
+        dep: str = DependsInject(get_db),
     ) -> None:
         pass
 
@@ -107,6 +107,8 @@ def test_check_all_injectable() -> None:
         )
         == []
     )
+
+    assert func_signature_check(func2_inner, [Path, AsyncIterator[Path]]) == []
 
     errors = check_all_injectables(get_func_args(func2_inner), [])
     assert len(errors) == 4
