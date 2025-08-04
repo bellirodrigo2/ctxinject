@@ -49,7 +49,7 @@ def check_all_injectables(
             return True
         if arg.name in bynames:
             return True
-        return any([generic_issubclass(arg.basetype, model) for model in modeltype])
+        return any([generic_issubclass(arg.basetype, model) for model in modeltype])  # type: ignore
 
     errors: List[str] = []
     valid_args: List[VarTypeInfo] = []
@@ -99,10 +99,12 @@ def check_modefield_types(
                 )
                 continue
 
-            if (
-                allowed_models is not None
-                and modelfield_inj.model not in allowed_models
-            ):
+            if allowed_models is not None and not any(
+                [
+                    generic_issubclass(modelfield_inj.model, model)
+                    for model in allowed_models
+                ]
+            ):  # type: ignore
                 errors.append(
                     error_msg(
                         arg.name,
