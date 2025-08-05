@@ -1,15 +1,14 @@
 from typing import Tuple
 
-from typemapping import (
-    VarTypeInfo,
-    generic_issubclass,
-    get_field_type,
-    get_func_args,
-    get_return_type,
-)
+from typemapping import VarTypeInfo, generic_issubclass, get_func_args, get_return_type
 from typing_extensions import Any, Callable, Iterable, List, Optional, Sequence, Type
 
-from ctxinject.model import DependsInject, Injectable, ModelFieldInject
+from ctxinject.model import (
+    DependsInject,
+    Injectable,
+    ModelFieldInject,
+    get_nested_field_type,
+)
 from ctxinject.validation import validator_check
 
 
@@ -114,7 +113,7 @@ def check_modefield_types(
                 continue
 
             fieldname = modelfield_inj.field or arg.name
-            modeltype = get_field_type(modelfield_inj.model, fieldname)
+            modeltype = get_nested_field_type(modelfield_inj.model, fieldname)
 
             if modeltype is None:
                 errors.append(

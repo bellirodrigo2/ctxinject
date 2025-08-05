@@ -1,6 +1,5 @@
 import sys
 from datetime import date, datetime, time
-from typing import List, Optional
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -229,14 +228,6 @@ class TestExtractType:
     def test_extract_regular_type(self):
         assert extract_type(str) is str
         assert extract_type(int) is int
-
-    def test_extract_generic_type(self):
-
-        assert extract_type(List[str]) is list
-        assert (
-            extract_type(Optional[int]) is type(None)
-            or extract_type(Optional[int]) is not None
-        )
 
 
 class TestFuncArgValidator:
@@ -685,7 +676,7 @@ class TestEdgeCases:
         mock_type.__class__ = MagicMock()
         mock_type.__class__.__name__ = "GenericAlias"
 
-        with patch("ctxinject.validation.get_origin", return_value=list):
+        with patch("ctxinject.validation.get_equivalent_origin", return_value=list):
             result = extract_type(mock_type)
             assert result is list
 

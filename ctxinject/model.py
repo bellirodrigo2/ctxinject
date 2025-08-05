@@ -1,5 +1,8 @@
 from typing import Any, Callable, Optional, Protocol, Type, runtime_checkable
 
+from typemapping import get_field_type
+from typemapping.type_check import get_optional_inner_type, is_optional_type
+
 
 @runtime_checkable
 class Iinjectable(Protocol):
@@ -211,6 +214,39 @@ class ModelFieldInject(ArgsInjectable):
     def model(self) -> Type[Any]:
         """Get the model type for this injection."""
         return self._model
+
+
+def get_nested_field_type(model: Type[Any], field_path: str) -> Optional[Type[Any]]:
+    """
+    Get the type of a nested field path like 'cls1.cls2.cls3'.
+    If any field in the path is Optional, the final type will be Optional.
+    """
+    if not field_path:
+        return None
+
+    # Simple case
+    if "." not in field_path:
+        return get_field_type(model, field_path)
+
+    fields = field_path.split(".")
+    current_type = model
+    is_path_optional = False
+
+    for field_name in fields:
+        if current_type is None:
+            return None
+
+        field_type = get_field_type(current_type, field_name)
+        if field_type is None:
+            return None
+
+        if is_optional_type(field_type):
+            is_path_optional = True
+            current_type = get_optional_inner_type(field_type)
+        else:
+            current_type = field_type
+
+    return Optional[current_type] if is_path_optional else current_type  # type: ignore
 
 
 class CallableInjectable(Injectable):

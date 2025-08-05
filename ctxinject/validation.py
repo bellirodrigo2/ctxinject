@@ -7,7 +7,7 @@ from uuid import UUID
 import orjson
 from dateutil.parser import ParserError
 from dateutil.parser import parse as parsedate
-from typemapping import defensive_issubclass
+from typemapping import defensive_issubclass, get_equivalent_origin
 from typing_extensions import (
     Annotated,
     Any,
@@ -19,7 +19,6 @@ from typing_extensions import (
     Tuple,
     Type,
     Union,
-    get_origin,
 )
 
 from ctxinject.model import ModelFieldInject
@@ -173,7 +172,7 @@ InjectFunc = Callable[[Type[Any], Type[Any]], Optional[Callable[..., Any]]]
 def extract_type(bt: Type[Any]) -> Type[Any]:
     """Extract the origin type from complex types."""
     if not isinstance(bt, type):
-        return get_origin(bt)
+        return get_equivalent_origin(bt)
     return bt
 
 

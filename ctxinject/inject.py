@@ -3,9 +3,14 @@ import inspect
 from functools import partial
 from typing import Any, Callable, Container, Dict, Iterable, Optional, Type, Union
 
-from typemapping import VarTypeInfo, get_field_type, get_func_args
+from typemapping import VarTypeInfo, get_func_args
 
-from ctxinject.model import CallableInjectable, Injectable, ModelFieldInject
+from ctxinject.model import (
+    CallableInjectable,
+    Injectable,
+    ModelFieldInject,
+    get_nested_field_type,
+)
 from ctxinject.validation import get_validator
 
 
@@ -118,8 +123,21 @@ class ModelFieldResolver(BaseResolver):
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
         """Extract field or call method from model instance."""
-        method = getattr(context[self._model_type], self._field_name)
-        return method() if callable(method) else method
+        obj = context[self._model_type]
+        fields = self._field_name.split(".")
+
+        for field_name in fields:
+            if obj is None:
+                return None
+
+            if not hasattr(obj, field_name):
+                raise AttributeError(
+                    f"'{type(obj).__name__}' object has no attribute '{field_name}'"
+                )
+
+            attr = getattr(obj, field_name)
+            obj = attr() if callable(attr) else attr
+        return obj
 
 
 def wrap_validate_sync(
@@ -314,7 +332,7 @@ def map_ctx(
             if isinstance(instance, ModelFieldInject):
                 tgtmodel = instance.model
                 tgt_field = instance.field or arg.name
-                modeltype = get_field_type(tgtmodel, tgt_field)
+                modeltype = get_nested_field_type(tgtmodel, tgt_field)
                 if tgtmodel in context and modeltype:
                     from_type = modeltype
                     value = ModelFieldResolver(

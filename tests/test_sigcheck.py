@@ -7,7 +7,7 @@ from typing import List as List_t
 from uuid import UUID
 
 from typemapping import get_func_args
-from typing_extensions import Annotated, Any, AsyncIterator, Dict, List
+from typing_extensions import Annotated, AsyncIterator, Dict, List
 
 from ctxinject.model import ArgsInjectable, DependsInject, Injectable, ModelFieldInject
 from ctxinject.sigcheck import (
