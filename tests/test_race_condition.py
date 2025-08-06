@@ -1,7 +1,7 @@
 """
 Comprehensive test suite for race condition fixes with optimized resolver classes.
 
-This module thoroughly tests that the new SyncResolver/AsyncResolver implementation
+This module thoroughly tests that the new SyncResolver/FuncResolver implementation
 correctly handles concurrent dependency resolution without race conditions while
 maintaining optimal performance.
 """
@@ -12,13 +12,9 @@ from typing import Any, Dict, List, Set
 
 import pytest
 
-from ctxinject.inject import (
-    AsyncResolver,
-    FuncResolver,
-    inject_args,
-    resolve_mapped_ctx,
-)
+from ctxinject.inject import inject_args, resolve_mapped_ctx
 from ctxinject.model import ArgsInjectable, DependsInject
+from ctxinject.resolvers import FuncResolver
 
 
 class TestResolverClassesPerformance:
@@ -30,20 +26,20 @@ class TestResolverClassesPerformance:
         def test_func(ctx: Dict[str, Any]) -> str:
             return "sync_result"
 
-        resolver = FuncResolver(test_func)
+        resolver = FuncResolver(test_func, False)
         result = resolver({"test": "context"})
 
         assert result == "sync_result"
         assert hasattr(resolver, "_func")
 
     def test_async_resolver_creation(self) -> None:
-        """Test AsyncResolver creation and basic functionality."""
+        """Test FuncResolver creation and basic functionality."""
 
         async def test_func(ctx: Dict[str, Any]) -> str:
             await asyncio.sleep(0.001)
             return "async_result"
 
-        resolver = AsyncResolver(test_func)
+        resolver = FuncResolver(test_func, True)
 
         # Should return awaitable when called
         context = {"test": "context"}
@@ -59,14 +55,14 @@ class TestResolverClassesPerformance:
 
     def test_resolver_type_detection_performance(self) -> None:
         """Test that isinstance() detection is fast for resolver types."""
-        sync_resolver = FuncResolver(lambda ctx: "sync")
-        async_resolver = AsyncResolver(lambda ctx: "async")
+        sync_resolver = FuncResolver(lambda ctx: "sync", False)
+        async_resolver = FuncResolver(lambda ctx: "async", True)
 
         # Time isinstance checks (should be very fast)
         start_time = time.perf_counter()
         for _ in range(10000):
-            isinstance(sync_resolver, AsyncResolver)
-            isinstance(async_resolver, AsyncResolver)
+            isinstance(sync_resolver, FuncResolver)
+            isinstance(async_resolver, FuncResolver)
         end_time = time.perf_counter()
 
         # Should complete very quickly
@@ -80,7 +76,7 @@ class TestResolverClassesPerformance:
 
         # Should have __slots__ defined
         assert hasattr(FuncResolver, "__slots__")
-        assert hasattr(AsyncResolver, "__slots__")
+        assert hasattr(FuncResolver, "__slots__")
 
 
 class TestConcurrentAsyncResolution:
@@ -109,11 +105,11 @@ class TestConcurrentAsyncResolution:
             execution_log.append("dep3_end")
             return "result3"
 
-        # Create mapped context with AsyncResolvers
+        # Create mapped context with FuncResolvers
         mapped_ctx = {
-            "dep1": AsyncResolver(lambda ctx: slow_dependency_1()),
-            "dep2": AsyncResolver(lambda ctx: slow_dependency_2()),
-            "dep3": AsyncResolver(lambda ctx: slow_dependency_3()),
+            "dep1": FuncResolver(lambda ctx: slow_dependency_1(), True),
+            "dep2": FuncResolver(lambda ctx: slow_dependency_2(), True),
+            "dep3": FuncResolver(lambda ctx: slow_dependency_3(), True),
         }
 
         start_time = time.perf_counter()
@@ -155,10 +151,10 @@ class TestConcurrentAsyncResolution:
             return "sync_result"
 
         mapped_ctx = {
-            "sync1": FuncResolver(lambda ctx: sync_dep()),
-            "async1": AsyncResolver(lambda ctx: async_dep()),
-            "sync2": FuncResolver(lambda ctx: "direct_sync"),
-            "async2": AsyncResolver(lambda ctx: async_dep()),
+            "sync1": FuncResolver(lambda ctx: sync_dep(), False),
+            "async1": FuncResolver(lambda ctx: async_dep(), True),
+            "sync2": FuncResolver(lambda ctx: "direct_sync", False),
+            "async2": FuncResolver(lambda ctx: async_dep(), True),
         }
 
         result = await resolve_mapped_ctx({}, mapped_ctx)
@@ -181,8 +177,8 @@ class TestConcurrentAsyncResolution:
             return "success"
 
         mapped_ctx = {
-            "good": AsyncResolver(lambda ctx: successful_dependency()),
-            "bad": AsyncResolver(lambda ctx: failing_dependency()),
+            "good": FuncResolver(lambda ctx: successful_dependency(), True),
+            "bad": FuncResolver(lambda ctx: failing_dependency(), True),
         }
 
         with pytest.raises(ValueError, match="Async dependency failed"):
@@ -199,8 +195,8 @@ class TestConcurrentAsyncResolution:
             return "success"
 
         mapped_ctx = {
-            "good": FuncResolver(lambda ctx: successful_sync()),
-            "bad": FuncResolver(lambda ctx: failing_sync()),
+            "good": FuncResolver(lambda ctx: successful_sync(), False),
+            "bad": FuncResolver(lambda ctx: failing_sync(), False),
         }
 
         with pytest.raises(RuntimeError, match="Sync resolver failed"):
@@ -334,9 +330,9 @@ class TestRaceConditionScenarios:
             return f"{identifier}_result_{final_value}"
 
         mapped_ctx = {
-            "service1": AsyncResolver(lambda ctx: increment_counter("svc1")),
-            "service2": AsyncResolver(lambda ctx: increment_counter("svc2")),
-            "service3": AsyncResolver(lambda ctx: increment_counter("svc3")),
+            "service1": FuncResolver(lambda ctx: increment_counter("svc1"), True),
+            "service2": FuncResolver(lambda ctx: increment_counter("svc2"), True),
+            "service3": FuncResolver(lambda ctx: increment_counter("svc3"), True),
         }
 
         result = await resolve_mapped_ctx({}, mapped_ctx)
@@ -417,9 +413,9 @@ class TestRaceConditionScenarios:
                 completion_tracker.add("failing_cleanup")
 
         mapped_ctx = {
-            "service1": AsyncResolver(lambda ctx: successful_service("svc1")),
-            "failing": AsyncResolver(lambda ctx: failing_service()),
-            "service2": AsyncResolver(lambda ctx: successful_service("svc2")),
+            "service1": FuncResolver(lambda ctx: successful_service("svc1"), True),
+            "failing": FuncResolver(lambda ctx: failing_service(), True),
+            "service2": FuncResolver(lambda ctx: successful_service("svc2"), True),
         }
 
         with pytest.raises(ValueError, match="Service intentionally failed"):
@@ -449,10 +445,12 @@ class TestBackwardCompatibility:
 
         # Mix new resolver classes with legacy partials
         mapped_ctx = {
-            "new_sync": FuncResolver(lambda ctx: "new_sync_result"),
-            "legacy": partial(legacy_resolver, arg_name="test_arg"),
-            "new_async": AsyncResolver(
-                lambda ctx: asyncio.sleep(0.01) or "new_async_result"
+            "new_sync": FuncResolver(lambda ctx: "new_sync_result", False),
+            "legacy": FuncResolver(
+                partial(legacy_resolver, arg_name="test_arg"), False
+            ),
+            "new_async": FuncResolver(
+                lambda ctx: asyncio.sleep(0.01) or "new_async_result", True
             ),
         }
 
@@ -496,8 +494,8 @@ class TestStressAndLoad:
         # Create many async resolvers
         mapped_ctx = {}
         for i in range(num_dependencies):
-            mapped_ctx[f"dep_{i}"] = AsyncResolver(
-                lambda ctx, dep_id=i: numbered_dependency(dep_id)
+            mapped_ctx[f"dep_{i}"] = FuncResolver(
+                lambda ctx, dep_id=i: numbered_dependency(dep_id), True
             )
 
         start_time = time.perf_counter()
@@ -573,9 +571,9 @@ class TestEdgeCases:
     async def test_only_sync_resolvers(self) -> None:
         """Test context with only sync resolvers (no async path)."""
         mapped_ctx = {
-            "sync1": FuncResolver(lambda ctx: "result1"),
-            "sync2": FuncResolver(lambda ctx: "result2"),
-            "sync3": FuncResolver(lambda ctx: "result3"),
+            "sync1": FuncResolver(lambda ctx: "result1", False),
+            "sync2": FuncResolver(lambda ctx: "result2", False),
+            "sync3": FuncResolver(lambda ctx: "result3", False),
         }
 
         result = await resolve_mapped_ctx({}, mapped_ctx)
@@ -593,9 +591,9 @@ class TestEdgeCases:
             return f"async_{value}"
 
         mapped_ctx = {
-            "async1": AsyncResolver(lambda ctx: async_dep("1")),
-            "async2": AsyncResolver(lambda ctx: async_dep("2")),
-            "async3": AsyncResolver(lambda ctx: async_dep("3")),
+            "async1": FuncResolver(lambda ctx: async_dep("1"), True),
+            "async2": FuncResolver(lambda ctx: async_dep("2"), True),
+            "async3": FuncResolver(lambda ctx: async_dep("3"), True),
         }
 
         result = await resolve_mapped_ctx({}, mapped_ctx)
@@ -616,8 +614,8 @@ class TestEdgeCases:
             return f"async_{ctx.get('base_value', 'default')}"
 
         mapped_ctx = {
-            "sync": FuncResolver(context_dependent_sync),
-            "async": AsyncResolver(context_dependent_async),
+            "sync": FuncResolver(context_dependent_sync, False),
+            "async": FuncResolver(context_dependent_async, True),
         }
 
         context = {"base_value": "test_context"}

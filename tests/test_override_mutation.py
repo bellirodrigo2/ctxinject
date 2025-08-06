@@ -161,10 +161,10 @@ class TestOverrideStateMutation:
     async def test_override_with_validation(self) -> None:
         """Test that overrides work correctly when validation is involved."""
 
-        def original_provider():
+        def original_provider() -> str:
             return "original_value"
 
-        def override_provider():
+        def override_provider() -> str:
             return "override_value"
 
         def validator(instance, **kwargs):
