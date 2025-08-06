@@ -11,6 +11,15 @@ from ctxinject.model import (
     ModelFieldInject,
     get_nested_field_type,
 )
+from ctxinject.resolver import (
+    AsyncResolver,
+    BaseResolver,
+    DefaultResolver,
+    FuncResolver,
+    ModelFieldResolver,
+    NameResolver,
+    TypeResolver,
+)
 from ctxinject.validation import get_validator
 
 
@@ -26,118 +35,6 @@ class UnresolvedInjectableError(Exception):
     """
 
     ...
-
-
-class BaseResolver:
-    """Base class for all synchronous resolvers."""
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Execute the resolver function."""
-        raise NotImplementedError(
-            "Subclasses must implement __call__"
-        )  # pragma: no cover
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(...)"  # pragma: no cover
-
-
-class AsyncResolver(BaseResolver):
-    """Asynchronous resolver wrapper for optimal performance."""
-
-    __slots__ = ("_func",)
-
-    def __init__(self, func: Callable[..., Any]) -> None:
-        """Initialize async resolver with a callable."""
-        self._func = func
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Execute the async resolver function."""
-        return self._func(context)
-
-
-class FuncResolver(BaseResolver):
-    """Synchronous resolver wrapper from function."""
-
-    __slots__ = ("_func",)
-
-    def __init__(self, func: Callable[[Dict[Any, Any]], Any]) -> None:
-        """Initialize function resolver."""
-        self._func = func
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Execute the wrapped function with context."""
-        return self._func(context)
-
-
-class NameResolver(BaseResolver):
-    """Resolves by argument name from context."""
-
-    __slots__ = ("_arg_name",)
-
-    def __init__(self, arg_name: str) -> None:
-        """Initialize name-based resolver."""
-        self._arg_name = arg_name
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Resolve value by name from context."""
-        return context[self._arg_name]
-
-
-class TypeResolver(BaseResolver):
-    """Resolves by type from context."""
-
-    __slots__ = ("_target_type",)
-
-    def __init__(self, target_type: Type[Any]) -> None:
-        """Initialize type-based resolver."""
-        self._target_type = target_type
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Resolve value by type from context."""
-        return context[self._target_type]
-
-
-class DefaultResolver(BaseResolver):
-    """Resolver that returns a pre-configured default value."""
-
-    __slots__ = ("_default_value",)
-
-    def __init__(self, default_value: Any) -> None:
-        """Initialize default value resolver."""
-        self._default_value = default_value
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Return the pre-configured default value."""
-        return self._default_value
-
-
-class ModelFieldResolver(BaseResolver):
-    """Resolver that extracts field/method from model instance in context."""
-
-    __slots__ = ("_model_type", "_field_name")
-
-    def __init__(self, model_type: Type[Any], field_name: str) -> None:
-        """Initialize model field resolver."""
-        self._model_type = model_type
-        self._field_name = field_name
-
-    def __call__(self, context: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Extract field or call method from model instance."""
-        obj = context[self._model_type]
-        fields = self._field_name.split(".")
-
-        for field_name in fields:
-            if obj is None:
-                return None
-
-            if not hasattr(obj, field_name):
-                raise AttributeError(
-                    f"'{type(obj).__name__}' object has no attribute '{field_name}'"
-                )
-
-            attr = getattr(obj, field_name)
-            obj = attr() if callable(attr) else attr
-        return obj
 
 
 def wrap_validate_sync(
@@ -298,13 +195,12 @@ def map_ctx(
 
             # Apply override without mutating the original object
             dep_func = overrides.get(instance.default, instance.default)
-            # ✅ FIXED: Do NOT mutate callable_instance._default
-
             dep_args = get_func_args(dep_func)
             dep_ctx_map = map_ctx(
                 dep_args, context, allow_incomplete, validate, overrides
             )
 
+            # value = create_callable_resolver(dep_func, dep_ctx_map)
             async def resolver(
                 actual_ctx: Dict[Any, Any],
                 f: Callable[..., Any] = dep_func,
@@ -314,7 +210,6 @@ def map_ctx(
                 if inspect.iscoroutinefunction(f):
                     return await f(**sub_kwargs)
                 else:
-                    # f can be a normal function or lambda that returns coroutine
                     result = f(**sub_kwargs)
                     # Check if the result is a coroutine
                     if inspect.iscoroutine(result):
