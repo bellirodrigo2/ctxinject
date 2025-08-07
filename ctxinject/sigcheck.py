@@ -1,8 +1,17 @@
+from collections.abc import AsyncGenerator, Generator
 from typing import Tuple
 
-from typemapping import VarTypeInfo, generic_issubclass, get_func_args, get_return_type
+from typemapping import (
+    VarTypeInfo,
+    generic_issubclass,
+    get_args,
+    get_func_args,
+    get_origin,
+    get_return_type,
+)
 from typing_extensions import Any, Callable, Iterable, List, Optional, Sequence, Type
 
+from ctxinject.cm_handler import is_generator
 from ctxinject.model import (
     DependsInject,
     Injectable,
@@ -164,7 +173,7 @@ def check_depends_types(
     2. The lambda is simple (no complex logic)
     """
     errors: List[str] = []
-    deps: List[Tuple[str, Optional[Type[Any]], Any]] = [
+    deps: List[Tuple[str, Type[Any], Any]] = [
         (arg.name, arg.basetype, arg.getinstance(tgttype).default)  # type: ignore
         for arg in args
         if arg.hasinstance(tgttype)
@@ -182,20 +191,24 @@ def check_depends_types(
         # Get function name for better error messages
         func_name = getattr(dep_func, "__name__", str(dep_func))
 
-        # ✅ Use typemapping's robust type hints resolution
         return_type = get_return_type(dep_func)
+        is_gen = is_generator(dep_func)
 
         if return_type is None:
-            errors.append(
-                error_msg(
-                    arg_name,
-                    "Depends Return should a be type, but None was found.",
+            if not is_gen:
+                errors.append(
+                    error_msg(
+                        arg_name,
+                        "Depends Return should a be type, but None was found.",
+                    )
                 )
-            )
             continue
 
-        # ✅ TYPE COMPATIBILITY CHECK
         if not generic_issubclass(return_type, dep_type):  # type: ignore
+            if is_gen:
+                if get_origin(return_type) in {Generator, AsyncGenerator}:
+                    if generic_issubclass(get_args(return_type)[0], dep_type):
+                        continue
             errors.append(
                 error_msg(
                     arg_name,

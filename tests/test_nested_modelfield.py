@@ -1,11 +1,3 @@
-"""
-Fixed test suite for nested field support in ctxinject.
-Fixes:
-1. Add @pytest.mark.asyncio decorator for async tests
-2. Fix type annotations issues
-3. Handle parameters that aren't injectable
-"""
-
 import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional

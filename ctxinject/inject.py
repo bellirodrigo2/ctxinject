@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import AsyncExitStack
 from functools import partial
 from typing import Any, Callable, Container, Dict, Iterable, Optional, Type, Union
 
@@ -37,7 +38,9 @@ class UnresolvedInjectableError(Exception):
 
 
 async def resolve_mapped_ctx(
-    input_ctx: Dict[Union[str, Type[Any]], Any], mapped_ctx: Dict[str, BaseResolver]
+    input_ctx: Dict[Union[str, Type[Any]], Any],
+    mapped_ctx: Dict[str, BaseResolver],
+    stack: Optional[AsyncExitStack] = None,
 ) -> Dict[Any, Any]:
     """
     Resolve mapped context with optimal sync/async separation using type checking.
@@ -84,17 +87,15 @@ async def resolve_mapped_ctx(
     # Single pass: separate sync and async using fast isinstance check
     for key, resolver in mapped_ctx.items():
         try:
+            result = resolver(input_ctx, stack)
+
             if resolver.isasync:
-                # Async resolver - add to concurrent batch
-                task = resolver(input_ctx)
-                async_tasks.append(task)
+                async_tasks.append(result)
                 async_keys.append(key)
             else:
-                # Sync resolver (SyncResolver or legacy partial) - execute immediately
-                results[key] = resolver(input_ctx)
+                results[key] = result
 
         except Exception:
-            # Re-raise original exception to preserve error semantics
             raise
 
     # Resolve all async tasks concurrently (if any)
@@ -116,28 +117,17 @@ async def resolve_mapped_ctx(
     return results
 
 
-def _inject_validate(
-    instance: Injectable,
-    from_type: Type[Any],
-    bt: Type[Any],
-) -> None:
-
-    if not instance.has_validate:
-        instance._validator = get_validator(from_type, bt)  # type: ignore
-
-
 def inject_validate(
     value: BaseResolver,
-    instance: Injectable,
-    from_type: Type[Any],
-    bt: Type[Any],
+    instance: Optional[Injectable],
+    from_type: Optional[Type[Any]],
+    bt: Optional[Type[Any]],
 ) -> BaseResolver:
-    if instance is not None and bt is not None and from_type is not None:
-
-        _inject_validate(instance, from_type, bt)
+    if instance is not None:
+        if not instance.has_validate:
+            instance._validator = get_validator(from_type, bt)  # type: ignore
         if instance.has_validate:
-            resolver = ValidateResolver
-            value = resolver(
+            value = ValidateResolver(
                 func=value,
                 instance=instance,
                 bt=bt,  # type: ignore
@@ -151,41 +141,7 @@ def map_ctx(
     allow_incomplete: bool,
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
-) -> Dict[str, Any]:
-    """
-    Map context arguments to resolvers using optimal resolver wrappers.
-
-    Internal function that analyzes function arguments and creates appropriate
-    resolvers for each parameter based on the injection context.
-    """
-    return _map_ctx(
-        args=args,
-        context=context,
-        allow_incomplete=allow_incomplete,
-        make_depends_resolver=make_depends_resolver,
-        validate=validate,
-        overrides=overrides,
-    )
-
-
-def make_depends_resolver(
-    dep_func: Callable[..., Any],
-    dep_ctx_map: Dict[Any, Any],
-) -> BaseResolver:
-    return DependsResolver(
-        func_inner=dep_func,
-        ctx_map=dep_ctx_map,
-        resolve_mapped_ctx=resolve_mapped_ctx,
-    )
-
-
-def _map_ctx(
-    args: Iterable[VarTypeInfo],
-    context: Container[Union[str, Type[Any]]],
-    allow_incomplete: bool,
-    make_depends_resolver: Callable[..., BaseResolver],
-    validate: bool = True,
-    overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
+    enable_async_model_field: bool = False,
 ) -> Dict[str, Any]:
     ctx: Dict[str, Any] = {}
     overrides = overrides or {}
@@ -204,12 +160,14 @@ def _map_ctx(
             dep_func = overrides.get(instance.default, instance.default)
             dep_args = get_func_args(dep_func)
             dep_ctx_map = map_ctx(
-                dep_args, context, allow_incomplete, validate, overrides
+                args=dep_args,
+                context=context,
+                allow_incomplete=allow_incomplete,
+                validate=validate,
+                overrides=overrides,
+                enable_async_model_field=enable_async_model_field,
             )
-            value = make_depends_resolver(
-                dep_func,
-                dep_ctx_map,
-            )
+            value = DependsResolver(dep_func, dep_ctx_map, resolve_mapped_ctx)
             from_type = get_return_type(dep_func)
         # by name
         elif arg.name in context:
@@ -222,11 +180,13 @@ def _map_ctx(
                 tgtmodel = instance.model
                 tgt_field = instance.field or arg.name
                 modeltype = get_nested_field_type(tgtmodel, tgt_field)
-                if tgtmodel in context and modeltype:
+                if tgtmodel in context and (modeltype or enable_async_model_field):
+
                     from_type = modeltype
                     value = ModelFieldResolver(
                         model_type=tgtmodel,
                         field_name=tgt_field,
+                        async_model_field=enable_async_model_field,
                     )
         # by type
         if value is None and bt is not None and bt in context:
@@ -258,6 +218,7 @@ def get_mapped_ctx(
     allow_incomplete: bool = True,
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
+    enable_async_model_field: bool = False,
 ) -> Dict[str, Any]:
     """
     Get mapped context with optimal resolver wrappers for a function.
@@ -296,7 +257,14 @@ def get_mapped_ctx(
         process before executing it.
     """
     funcargs = get_func_args(func)
-    return map_ctx(funcargs, context, allow_incomplete, validate, overrides)
+    return map_ctx(
+        args=funcargs,
+        context=context,
+        allow_incomplete=allow_incomplete,
+        validate=validate,
+        overrides=overrides,
+        enable_async_model_field=enable_async_model_field,
+    )
 
 
 async def inject_args(
@@ -305,6 +273,8 @@ async def inject_args(
     allow_incomplete: bool = True,
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
+    stack: Optional[AsyncExitStack] = None,
+    enable_async_model_field: bool = False,
 ) -> Callable[..., Any]:
     """
     Inject arguments into function with optimal performance using dependency injection.
@@ -406,7 +376,12 @@ async def inject_args(
         context = {type(context): context}
     context_list = list(context.keys())
     mapped_ctx = get_mapped_ctx(
-        func, context_list, allow_incomplete, validate, overrides
+        func=func,
+        context=context_list,
+        allow_incomplete=allow_incomplete,
+        validate=validate,
+        overrides=overrides,
+        enable_async_model_field=enable_async_model_field,
     )
-    resolved = await resolve_mapped_ctx(context, mapped_ctx)
+    resolved = await resolve_mapped_ctx(context, mapped_ctx, stack)
     return partial(func, **resolved)

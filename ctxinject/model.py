@@ -36,6 +36,8 @@ class Injectable(Iinjectable):
             **meta: Additional metadata passed to validator
         """
         self._default = default
+        if not callable(validator):
+            validator = None
         self._validator = validator
         self.meta = meta
 
