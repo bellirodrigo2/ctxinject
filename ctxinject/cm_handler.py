@@ -1,6 +1,3 @@
-# CODIGO RETIRADO DE FASTDEPENDS
-
-
 import functools
 import inspect
 from contextlib import asynccontextmanager
