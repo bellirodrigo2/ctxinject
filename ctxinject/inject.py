@@ -1,9 +1,22 @@
 import asyncio
 from contextlib import AsyncExitStack
 from functools import partial
-from typing import Any, Callable, Container, Dict, Iterable, Optional, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Container,
+    Dict,
+    Iterable,
+    Optional,
+    Type,
+    Union,
+)
 
 from typemapping import VarTypeInfo, get_func_args, get_return_type
+
+if TYPE_CHECKING:
+    from ctxinject.overrides import Provider
 
 from ctxinject.model import CallableInjectable, Injectable, ModelFieldInject
 from ctxinject.resolvers import (
@@ -267,7 +280,10 @@ async def inject_args(
     context: Union[Dict[Union[str, Type[Any]], Any], Any],
     allow_incomplete: bool = True,
     validate: bool = True,
-    overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
+    overrides: Optional[
+        Union[Dict[Callable[..., Any], Callable[..., Any]], "Provider"]
+    ] = None,
+    use_global_provider: bool = False,
     stack: Optional[AsyncExitStack] = None,
     enable_async_model_field: bool = False,
 ) -> Callable[..., Any]:
@@ -287,7 +303,12 @@ async def inject_args(
         allow_incomplete: If True, allows missing dependencies (they remain as parameters).
                          If False, raises UnresolvedInjectableError for missing deps.
         validate: Whether to apply validation functions defined in injectable annotations
-        overrides: Optional mapping to replace dependency functions with alternatives
+        overrides: Dependency overrides - can be:
+                  - Dict mapping original functions to replacements (legacy)
+                  - Provider instance for advanced override management
+        use_global_provider: Whether to use the global provider for overrides
+        stack: Optional AsyncExitStack for context managers
+        enable_async_model_field: Whether to enable async model field injection
 
     Returns:
         A functools.partial object with resolved dependencies pre-filled.
@@ -367,6 +388,25 @@ async def inject_args(
         - Supports chaining multiple injections on the same function
         - Name-based injection takes precedence over type-based injection
     """
+    # Resolve final overrides from provider or legacy parameter
+    from ctxinject.overrides import Provider, resolve_overrides
+
+    if overrides is None or isinstance(overrides, Provider):
+        # No overrides provided, just use global if enabled
+        resolved_overrides = resolve_overrides(
+            local_provider=None, use_global=use_global_provider
+        )
+    elif isinstance(overrides, dict):
+        # Legacy dict format - convert to resolved format
+        global_overrides = (
+            resolve_overrides(local_provider=None, use_global=use_global_provider)
+            if use_global_provider
+            else {}
+        )
+        resolved_overrides = {**global_overrides, **overrides}
+    else:
+        raise TypeError(f"overrides must be Dict or Provider, got {type(overrides)}")
+
     if not isinstance(context, dict):
         context = {type(context): context}
     context_list = list(context.keys())
@@ -375,7 +415,7 @@ async def inject_args(
         context=context_list,
         allow_incomplete=allow_incomplete,
         validate=validate,
-        overrides=overrides,
+        overrides=resolved_overrides,
         enable_async_model_field=enable_async_model_field,
     )
     resolved = await resolve_mapped_ctx(context, mapped_ctx, stack)

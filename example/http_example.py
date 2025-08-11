@@ -87,7 +87,7 @@ def make_request() -> PreparedRequest:
 
 
 async def main() -> None:
-
+    print("=== HTTP Request Injection Example ===\n", __file__)
     prepared_req = make_request()
     # this "input_ctx" object is required, since prepared_req is not a real PreparedRequest object
     # if prepared_req where a PreparedRequest object (not a protocol),

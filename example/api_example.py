@@ -346,16 +346,17 @@ def example_signature_validation() -> None:
     assert errors == []
 
     # Function with dependency issues
+    def no_return_type():  # No return type annotation
+        return "test"
+
     def bad_deps_func(
-        value: Annotated[
-            str, DependsInject(lambda x: x)
-        ],  # Lambda with args, no return type
+        value: Annotated[str, DependsInject(no_return_type)]
     ) -> str:
         return value
 
     errors = func_signature_check(bad_deps_func)
     assert len(errors) == 1
-    assert "but None was found." in errors[0]
+    assert "but None was found" in errors[0]
 
 
 # =============================================================================

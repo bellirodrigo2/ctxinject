@@ -67,6 +67,9 @@ from .model import (
     ModelFieldInject,
 )
 
+# Override management
+from .overrides import Provider, global_provider
+
 # Signature checking utilities
 from .sigcheck import func_signature_check
 
@@ -84,6 +87,9 @@ __all__ = [
     "CallableInjectable",
     "DependsInject",
     "ModelFieldInject",
+    # Override management
+    "Provider",
+    "global_provider",
     # Utilities
     "get_validator",
     "arg_proc",
