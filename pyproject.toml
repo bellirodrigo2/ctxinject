@@ -25,7 +25,7 @@ classifiers = [
 
 # Core dependencies (always required)
 dependencies = [
-    "typemapping>=0.1.0",
+    "typemapping>=0.1.7",
     "typing-extensions>=4.0.0",
     "orjson>=3.8.0",
     "python-dateutil>=2.8.0",
