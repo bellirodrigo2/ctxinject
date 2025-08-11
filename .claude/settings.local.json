@@ -5,7 +5,8 @@
       "Bash(rm:*)",
       "Bash(make test:*)",
       "Bash(pytest:*)",
-      "Bash(make lint:*)"
+      "Bash(make lint:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }

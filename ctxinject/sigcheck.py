@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
-from typing import Tuple
+from typing import Set, Tuple
 
 from typemapping import (
     VarTypeInfo,
@@ -163,7 +163,7 @@ def check_circular_dependencies(
     bynames: Optional[Iterable[str]] = None,
     bt_default_fallback: bool = True,
     arg_predicate: Optional[List[ArgCheck]] = None,
-    _call_stack: Optional[set] = None,
+    _call_stack: Optional[Set[Any]] = None,
 ) -> List[str]:
     """
     Check for circular dependencies in DependsInject functions.

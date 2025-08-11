@@ -221,6 +221,7 @@ class ModelFieldInject(ArgsInjectable):
     def get_nested_field_type(self, field_path: str) -> Optional[Type[Any]]:
         return get_nested_field_type(self.model, field_path)
 
+
 class CallableInjectable(Injectable):
     """Injectable for callable dependencies (functions, lambdas, etc.)."""
 
