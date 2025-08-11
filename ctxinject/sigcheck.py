@@ -156,6 +156,84 @@ def check_modefield_types(
     return errors
 
 
+def check_circular_dependencies(
+    args: List[VarTypeInfo],
+    tgttype: Type[DependsInject] = DependsInject,
+    modeltype: Optional[List[Type[Any]]] = None,
+    bynames: Optional[Iterable[str]] = None,
+    bt_default_fallback: bool = True,
+    arg_predicate: Optional[List[ArgCheck]] = None,
+    _call_stack: Optional[set] = None,
+) -> List[str]:
+    """
+    Check for circular dependencies in DependsInject functions.
+    
+    This function identifies circular dependency chains and removes
+    problematic arguments from the args list to prevent them from
+    being processed by subsequent checks.
+    
+    Args:
+        args: List of function arguments to check (modified in-place)
+        tgttype: Type of dependency injection to check for
+        modeltype: List of allowed model types
+        bynames: Names that are injectable by name
+        bt_default_fallback: Whether to use default type inference
+        arg_predicate: List of argument predicates for validation
+        _call_stack: Set tracking current dependency resolution path
+        
+    Returns:
+        List of error messages for circular dependencies found
+    """
+    if _call_stack is None:
+        _call_stack = set()
+    
+    errors: List[str] = []
+    valid_args: List[VarTypeInfo] = []
+    
+    for arg in args:
+        if arg.hasinstance(tgttype):
+            instance = arg.getinstance(tgttype)
+            dep_func = instance.default
+            
+            if callable(dep_func):
+                # Check for circular dependency
+                func_id = id(dep_func)
+                if func_id in _call_stack:
+                    errors.append(
+                        error_msg(arg.name, "Circular dependency detected in nested Depends")
+                    )
+                    # Skip this arg - don't add to valid_args so it's not processed further
+                    continue
+                
+                # Check nested dependencies recursively
+                _call_stack.add(func_id)
+                try:
+                    nested_errors = func_signature_check(
+                        dep_func,
+                        modeltype=modeltype,
+                        bynames=bynames,
+                        bt_default_fallback=bt_default_fallback,
+                        arg_predicate=arg_predicate,
+                        _call_stack=_call_stack,
+                    )
+                    if nested_errors:
+                        errors.extend(
+                            [error_msg(arg.name, f"Nested Depends Error: {err}") for err in nested_errors]
+                        )
+                        # If nested dependency has errors, don't process this arg further
+                        continue
+                finally:
+                    _call_stack.discard(func_id)
+        
+        # If we get here, the arg is valid (no circular dependency detected)
+        valid_args.append(arg)
+    
+    # Update args list in-place to remove problematic arguments
+    args.clear()
+    args.extend(valid_args)
+    return errors
+
+
 def check_depends_types(
     args: Sequence[VarTypeInfo],
     tgttype: Type[DependsInject] = DependsInject,
@@ -170,6 +248,8 @@ def check_depends_types(
     Accepts lambdas without return type annotations when:
     1. The target parameter type is known (not Any)
     2. The lambda is simple (no complex logic)
+    
+    Note: Circular dependency checking is handled separately by check_circular_dependencies.
     """
     errors: List[str] = []
     deps: List[Tuple[str, Type[Any], Any]] = [
@@ -179,16 +259,6 @@ def check_depends_types(
     ]
 
     for arg_name, dep_type, dep_func in deps:
-        if callable(dep_func):
-            dep_errors = func_signature_check(
-                dep_func,
-                modeltype=modeltype,
-                bynames=bynames,
-                bt_default_fallback=bt_default_fallback,
-                arg_predicate=arg_predicate,
-            )
-            if dep_errors:
-                print(dep_errors)
         if not callable(dep_func):
             errors.append(
                 error_msg(
@@ -260,6 +330,7 @@ def func_signature_check(
     bynames: Optional[Iterable[str]] = None,
     bt_default_fallback: bool = True,
     arg_predicate: Optional[List[ArgCheck]] = None,
+    _call_stack: Optional[set] = None,
 ) -> List[str]:
     """
     Check function signature for injection compatibility.
@@ -372,8 +443,25 @@ def func_signature_check(
     model_errors = check_modefield_types(args_list, modeltype, arg_predicate)
     all_errors.extend(model_errors)
 
-    # ✅ LAMBDA-FRIENDLY dependency check
-    dep_errors = check_depends_types(args_list)
+    # ✅ Check for circular dependencies first (removes problematic args from args_list)
+    circular_errors = check_circular_dependencies(
+        args_list,
+        modeltype=modeltype,
+        bynames=bynames,
+        bt_default_fallback=bt_default_fallback,
+        arg_predicate=arg_predicate,
+        _call_stack=_call_stack,
+    )
+    all_errors.extend(circular_errors)
+
+    # ✅ Check dependency types (now without circular dependencies)
+    dep_errors = check_depends_types(
+        args_list, 
+        modeltype=modeltype,
+        bynames=bynames,
+        bt_default_fallback=bt_default_fallback,
+        arg_predicate=arg_predicate,
+    )
     all_errors.extend(dep_errors)
 
     return all_errors
