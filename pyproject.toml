@@ -1,6 +1,6 @@
 [project]
 name = "ctxinject"
-version = "0.1.6"
+version = "0.1.7"
 description = "Context-based dependency injection for Python"
 readme = "README.md"
 requires-python = ">=3.8"

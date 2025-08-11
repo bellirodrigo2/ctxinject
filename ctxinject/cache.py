@@ -5,7 +5,7 @@ This module provides a simple cache that stores whatever you put in it,
 with no magic detection. Developer controls what gets cached.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 
 class DependencyCache:
@@ -21,7 +21,7 @@ class DependencyCache:
         self._cache: Dict[str, Any] = {}
         self._stats = {"hits": 0, "misses": 0}
 
-    def get(self, key: str) -> tuple[bool, Any]:
+    def get(self, key: str) -> Tuple[bool, Any]:
         """
         Get cached value for a dependency.
 
