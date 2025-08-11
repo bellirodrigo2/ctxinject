@@ -157,6 +157,39 @@ def constrained_bytejson(
         raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED (consistency)
 
 
+def base_constrained_list(
+    value: List[Any],
+    **kwargs: Any,
+) -> List[Any]:
+    min_length = kwargs.get("min_length", None)
+    max_length = kwargs.get("max_length", None)
+    length = len(value)
+    if min_length is not None and length < min_length:
+        raise ValueError(
+            f"List has {length} items, but should have at least {min_length}"  # ✅ FIXED
+        )
+    if max_length is not None and length > max_length:
+        raise ValueError(
+            f"List has {length} items, but should have at most {max_length}"  # ✅ FIXED
+        )
+    return value
+
+
+def base_constrained_dict(
+    value: Dict[Any, Any],
+    **kwargs: Any,
+) -> Dict[Any, Any]:
+    constrained_list(list(value.values()), **kwargs)
+    return value
+
+
+def constrained_uuid(  # type: ignore
+    value: str,
+    **kwargs: Any,
+) -> UUID:
+    return ConstrainedUUID(value, **kwargs)
+
+
 arg_proc: Dict[Tuple[Hashable, Hashable], Callable[..., Any]] = {
     (str, date): constrained_date,
     (str, time): constrained_time,
@@ -366,39 +399,8 @@ except ImportError:
 
         return ConstrainedNumber(value, gt, ge, lt, le, multiple_of)
 
-    def constrained_list(
-        value: List[Any],
-        **kwargs: Any,
-    ) -> List[Any]:
-
-        min_length = kwargs.get("min_length", None)
-        max_length = kwargs.get("max_length", None)
-        length = len(value)
-
-        if min_length is not None and length < min_length:
-            raise ValueError(
-                f"List has {length} items, but should have at least {min_length}"  # ✅ FIXED
-            )
-        if max_length is not None and length > max_length:
-            raise ValueError(
-                f"List has {length} items, but should have at most {max_length}"  # ✅ FIXED
-            )
-        return value
-
-    def constrained_dict(
-        value: Dict[Any, Any],
-        **kwargs: Any,
-    ) -> Dict[Any, Any]:
-
-        constrained_list(list(value.values()), **kwargs)
-
-        return value
-
-    def constrained_uuid(  # type: ignore
-        value: str,
-        **kwargs: Any,
-    ) -> UUID:
-        return ConstrainedUUID(value, **kwargs)
+    constrained_list = base_constrained_list
+    constrained_dict = base_constrained_dict
 
 
 arg_proc.update(

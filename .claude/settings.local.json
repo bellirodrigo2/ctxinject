@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(rm:*)",
+      "Bash(make test:*)",
+      "Bash(pytest:*)",
+      "Bash(make lint:*)"
+    ],
+    "deny": []
+  }
+}
