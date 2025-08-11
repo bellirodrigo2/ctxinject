@@ -5,12 +5,7 @@ from typing import Any, Callable, Container, Dict, Iterable, Optional, Type, Uni
 
 from typemapping import VarTypeInfo, get_func_args, get_return_type
 
-from ctxinject.model import (
-    CallableInjectable,
-    Injectable,
-    ModelFieldInject,
-    get_nested_field_type,
-)
+from ctxinject.model import CallableInjectable, Injectable, ModelFieldInject
 from ctxinject.resolvers import (
     BaseResolver,
     DefaultResolver,
@@ -179,7 +174,7 @@ def map_ctx(
             if isinstance(instance, ModelFieldInject):
                 tgtmodel = instance.model
                 tgt_field = instance.field or arg.name
-                modeltype = get_nested_field_type(tgtmodel, tgt_field)
+                modeltype = instance.get_nested_field_type(tgt_field)
                 if tgtmodel in context and (modeltype or enable_async_model_field):
 
                     from_type = modeltype

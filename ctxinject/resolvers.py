@@ -1,14 +1,54 @@
+import functools
 import inspect
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from typing import Any, Callable, Dict, Optional, Type, Union
-
-from ctxinject.cm_handler import (
-    contextmanager_in_threadpool,
-    is_async_gen_callable,
-    is_gen_callable,
-    run_in_threadpool,
+from typing import (
+    Any,
+    AsyncGenerator,
+    Callable,
+    ContextManager,
+    Dict,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
 )
-from ctxinject.model import Injectable
+
+import anyio
+from typing_extensions import ParamSpec
+
+from ctxinject.model import Injectable, is_async_gen_callable, is_gen_callable
+
+T = TypeVar("T")
+P = ParamSpec("P")
+
+
+async def run_in_threadpool(
+    func: Callable[P, T], *args: P.args, **kwargs: P.kwargs
+) -> T:
+    if kwargs:
+        func = functools.partial(func, **kwargs)
+    return await anyio.to_thread.run_sync(func, *args)
+
+
+@asynccontextmanager
+async def contextmanager_in_threadpool(
+    cm: ContextManager[T],
+) -> AsyncGenerator[T, None]:
+    exit_limiter = anyio.CapacityLimiter(1)
+    try:
+        yield await run_in_threadpool(cm.__enter__)
+    except Exception as e:
+        ok = bool(
+            await anyio.to_thread.run_sync(
+                cm.__exit__, type(e), e, None, limiter=exit_limiter
+            )
+        )
+        if not ok:  # pragma: no branch
+            raise e
+    else:
+        await anyio.to_thread.run_sync(
+            cm.__exit__, None, None, None, limiter=exit_limiter
+        )
 
 
 class BaseResolver:

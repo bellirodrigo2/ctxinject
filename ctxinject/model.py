@@ -1,7 +1,7 @@
+import inspect
 from typing import Any, Callable, Optional, Protocol, Type, runtime_checkable
 
-from typemapping import get_field_type
-from typemapping.type_check import get_optional_inner_type, is_optional_type
+from typemapping import get_field_type, get_optional_inner_type, is_optional_type
 
 
 @runtime_checkable
@@ -218,8 +218,11 @@ class ModelFieldInject(ArgsInjectable):
         """Get the model type for this injection."""
         return self._model
 
+    def get_nested_field_type(self, field_path: str) -> Optional[Type[Any]]:
+        return _get_nested_field_type(self.model, field_path)
 
-def get_nested_field_type(model: Type[Any], field_path: str) -> Optional[Type[Any]]:
+
+def _get_nested_field_type(model: Type[Any], field_path: str) -> Optional[Type[Any]]:
     """
     Get the type of a nested field path like 'cls1.cls2.cls3'.
     If any field in the path is Optional, the final type will be Optional.
@@ -354,4 +357,43 @@ class DependsInject(CallableInjectable):
         - All dependency resolution happens concurrently for performance
     """
 
-    pass
+    @property
+    def is_gen_callable(self) -> bool:
+        """Check if the default callable is a generator or async generator."""
+        return is_gen_callable(self.default)
+
+    @property
+    def is_async_gen_callable(self) -> bool:
+        """Check if the default callable is an async generator."""
+        return is_async_gen_callable(self.default)
+
+    @property
+    def is_generator_callable(self) -> bool:
+        """Check if the default callable is a generator."""
+        return is_generator(self.default)
+
+
+def is_any_gen_callable(
+    call: Callable[..., Any], inspect_func: Callable[[Callable[..., Any]], bool]
+) -> bool:
+    if inspect_func(call):
+        return True
+    dunder_call = getattr(call, "__call__", None)
+    if dunder_call and inspect_func(dunder_call):
+        return True
+    wrapped = getattr(call, "__wrapped__", None)
+    if wrapped and inspect_func(wrapped):
+        return True
+    return False
+
+
+def is_async_gen_callable(call: Callable[..., Any]) -> bool:
+    return is_any_gen_callable(call, inspect.isasyncgenfunction)
+
+
+def is_gen_callable(call: Callable[..., Any]) -> bool:
+    return is_any_gen_callable(call, inspect.isgeneratorfunction)
+
+
+def is_generator(call: Callable[..., Any]) -> bool:
+    return is_async_gen_callable(call) or is_gen_callable(call)

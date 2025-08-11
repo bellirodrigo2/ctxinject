@@ -11,13 +11,7 @@ from typemapping import (
 )
 from typing_extensions import Any, Callable, Iterable, List, Optional, Sequence, Type
 
-from ctxinject.cm_handler import is_generator
-from ctxinject.model import (
-    DependsInject,
-    Injectable,
-    ModelFieldInject,
-    get_nested_field_type,
-)
+from ctxinject.model import DependsInject, Injectable, ModelFieldInject, is_generator
 from ctxinject.validation import validator_check
 
 
@@ -122,7 +116,7 @@ def check_modefield_types(
                 continue
 
             fieldname = modelfield_inj.field or arg.name
-            modeltype = get_nested_field_type(modelfield_inj.model, fieldname)
+            modeltype = modelfield_inj.get_nested_field_type(fieldname)
 
             if modeltype is None:
                 errors.append(
@@ -163,7 +157,12 @@ def check_modefield_types(
 
 
 def check_depends_types(
-    args: Sequence[VarTypeInfo], tgttype: Type[DependsInject] = DependsInject
+    args: Sequence[VarTypeInfo],
+    tgttype: Type[DependsInject] = DependsInject,
+    modeltype: Optional[List[Type[Any]]] = None,
+    bynames: Optional[Iterable[str]] = None,
+    bt_default_fallback: bool = True,
+    arg_predicate: Optional[List[ArgCheck]] = None,
 ) -> List[str]:
     """
     Check dependency types with lambda-friendly validation.
@@ -180,6 +179,16 @@ def check_depends_types(
     ]
 
     for arg_name, dep_type, dep_func in deps:
+        if callable(dep_func):
+            dep_errors = func_signature_check(
+                dep_func,
+                modeltype=modeltype,
+                bynames=bynames,
+                bt_default_fallback=bt_default_fallback,
+                arg_predicate=arg_predicate,
+            )
+            if dep_errors:
+                print(dep_errors)
         if not callable(dep_func):
             errors.append(
                 error_msg(
