@@ -14,7 +14,10 @@ from ctxinject.validation import (
     ConstrainedNumber,
     ConstrainedStr,
     ConstrainedUUID,
+    ValidationError,
     arg_proc,
+    base_constrained_dict,
+    base_constrained_list,
     constrained_bytejson,
     constrained_date,
     constrained_datetime,
@@ -43,21 +46,21 @@ class TestConstrainedStr:
         assert ConstrainedStr("hello", min_length=3) == "hello"
 
     def test_min_length_invalid(self):
-        with pytest.raises(ValueError, match="String length must be minimun 5"):
+        with pytest.raises(ValidationError, match="String length must be minimun 5"):
             ConstrainedStr("hi", min_length=5)
 
     def test_max_length_valid(self):
         assert ConstrainedStr("hello", max_length=10) == "hello"
 
     def test_max_length_invalid(self):
-        with pytest.raises(ValueError, match="String length must be maximun 3"):
+        with pytest.raises(ValidationError, match="String length must be maximun 3"):
             ConstrainedStr("hello", max_length=3)
 
     def test_pattern_valid(self):
         assert ConstrainedStr("hello123", pattern=r"^hello\d+$") == "hello123"
 
     def test_pattern_invalid(self):
-        with pytest.raises(ValueError, match="String does not match pattern"):
+        with pytest.raises(ValidationError, match="String does not match pattern"):
             ConstrainedStr("hello", pattern=r"^\d+$")
 
     def test_all_constraints(self):
@@ -80,35 +83,35 @@ class TestConstrainedNumber:
         assert ConstrainedNumber(10, gt=5) == 10
 
     def test_gt_invalid(self):
-        with pytest.raises(ValueError, match="Value must be > 10"):
+        with pytest.raises(ValidationError, match="Value must be > 10"):
             ConstrainedNumber(10, gt=10)
 
     def test_ge_valid(self):
         assert ConstrainedNumber(10, ge=10) == 10
 
     def test_ge_invalid(self):
-        with pytest.raises(ValueError, match="Value must be >= 10"):
+        with pytest.raises(ValidationError, match="Value must be >= 10"):
             ConstrainedNumber(9, ge=10)
 
     def test_lt_valid(self):
         assert ConstrainedNumber(5, lt=10) == 5
 
     def test_lt_invalid(self):
-        with pytest.raises(ValueError, match="Value must be < 10"):
+        with pytest.raises(ValidationError, match="Value must be < 10"):
             ConstrainedNumber(10, lt=10)
 
     def test_le_valid(self):
         assert ConstrainedNumber(10, le=10) == 10
 
     def test_le_invalid(self):
-        with pytest.raises(ValueError, match="Value must be <= 10"):
+        with pytest.raises(ValidationError, match="Value must be <= 10"):
             ConstrainedNumber(11, le=10)
 
     def test_multiple_of_valid(self):
         assert ConstrainedNumber(15, multiple_of=5) == 15
 
     def test_multiple_of_invalid(self):
-        with pytest.raises(ValueError, match="Value must be a multiple of 5"):
+        with pytest.raises(ValidationError, match="Value must be a multiple of 5"):
             ConstrainedNumber(13, multiple_of=5)
 
     def test_all_constraints(self):
@@ -126,7 +129,7 @@ class TestConstrainedUUID:
         assert str(result) == uuid_str
 
     def test_invalid_uuid(self):
-        with pytest.raises(ValueError, match="Arg value should be a valid UUID string"):
+        with pytest.raises(ValidationError, match="Arg value should be a valid UUID string"):
             ConstrainedUUID("not-a-uuid")
 
 
@@ -158,7 +161,7 @@ class TestConstrainedDatetime:
 
     def test_from_constraint_invalid(self):
         min_date = datetime(2023, 1, 1)
-        with pytest.raises(ValueError, match="Datetime value must be on or after"):
+        with pytest.raises(ValidationError, match="Datetime value must be on or after"):
             ConstrainedDatetime("2022-06-15", from_=min_date)
 
     def test_to_constraint_valid(self):
@@ -168,18 +171,18 @@ class TestConstrainedDatetime:
 
     def test_to_constraint_invalid(self):
         max_date = datetime(2023, 12, 31)
-        with pytest.raises(ValueError, match="Datetime value must be on or before"):
+        with pytest.raises(ValidationError, match="Datetime value must be on or before"):
             ConstrainedDatetime("2024-06-15", to_=max_date)
 
     def test_invalid_datetime_string(self):
         with pytest.raises(
-            ValueError, match="Arg value should be a valid datetime string"
+            ValidationError, match="Arg value should be a valid datetime string"
         ):
             ConstrainedDatetime("not-a-date")
 
     def test_invalid_format(self):
         with pytest.raises(
-            ValueError, match="Arg value should be a valid datetime string"
+            ValidationError, match="Arg value should be a valid datetime string"
         ):
             ConstrainedDatetime("2023-01-15", fmt="%d/%m/%Y")
 
@@ -210,7 +213,7 @@ class TestConstrainedJson:
         assert result == {"key": "value", "number": 42}
 
     def test_constrained_json_invalid(self):
-        with pytest.raises(ValueError, match="Invalid JSON"):
+        with pytest.raises(ValidationError, match="Invalid JSON"):
             constrained_json("not-json")
 
     def test_constrained_bytejson_valid(self):
@@ -218,7 +221,7 @@ class TestConstrainedJson:
         assert result == {"key": "value", "number": 42}
 
     def test_constrained_bytejson_invalid(self):
-        with pytest.raises(ValueError, match="Invalid JSON"):
+        with pytest.raises(ValidationError, match="Invalid JSON"):
             constrained_bytejson(b"not-json")
 
 
@@ -287,39 +290,39 @@ class TestNonPydanticFallbacks:
     """Test the non-Pydantic fallback implementations."""
 
     def test_constrained_str_fallback(self):
-        result = constrained_str("hello", min_length=3, max_length=10)
+        result = ConstrainedStr("hello", min_length=3, max_length=10)
         assert result == "hello"
 
-        with pytest.raises(ValueError):
-            constrained_str("hi", min_length=3)
+        with pytest.raises(ValidationError):
+            ConstrainedStr("hi", min_length=3)
 
     def test_constrained_num_fallback(self):
-        result = constrained_num(15, gt=10, lt=20)
+        result = ConstrainedNumber(15, gt=10, lt=20)
         assert result == 15
 
-        with pytest.raises(ValueError):
-            constrained_num(5, gt=10)
+        with pytest.raises(ValidationError):
+            ConstrainedNumber(5, gt=10)
 
     def test_constrained_list_fallback(self):
-        result = constrained_list([1, 2, 3], min_length=2, max_length=5)
+        result = base_constrained_list([1, 2, 3], min_length=2, max_length=5)
         assert result == [1, 2, 3]
 
-        with pytest.raises(ValueError, match="should have at least 5"):
-            constrained_list([1, 2], min_length=5)
+        with pytest.raises(ValidationError, match="should have at least 5"):
+            base_constrained_list([1, 2], min_length=5)
 
-        with pytest.raises(ValueError, match="should have at most 2"):
-            constrained_list([1, 2, 3], max_length=2)
+        with pytest.raises(ValidationError, match="should have at most 2"):
+            base_constrained_list([1, 2, 3], max_length=2)
 
     def test_constrained_dict_fallback(self):
-        result = constrained_dict({"a": 1, "b": 2}, min_length=1, max_length=3)
+        result = base_constrained_dict({"a": 1, "b": 2}, min_length=1, max_length=3)
         assert result == {"a": 1, "b": 2}
 
-        with pytest.raises(ValueError):
-            constrained_dict({"a": 1}, min_length=3)
+        with pytest.raises(ValidationError):
+            base_constrained_dict({"a": 1}, min_length=3)
 
     def test_constrained_uuid_fallback(self):
         uuid_str = "550e8400-e29b-41d4-a716-446655440000"
-        result = constrained_uuid(uuid_str)
+        result = ConstrainedUUID(uuid_str)
         assert isinstance(result, UUID)
 
 
@@ -645,7 +648,7 @@ class TestEdgeCases:
             "ctxinject.validation.parsedate", side_effect=ParserError("Parse error")
         ):
             with pytest.raises(
-                ValueError, match="Arg value should be a valid datetime string"
+                ValidationError, match="Arg value should be a valid datetime string"
             ):
                 ConstrainedDatetime("any-string", fmt=None)
 
@@ -653,7 +656,7 @@ class TestEdgeCases:
         # Since ConstrainedDatetime has a fallback to parsedate,
         # we need to test a case where both strptime and parsedate fail
         with pytest.raises(
-            ValueError, match="Arg value should be a valid datetime string"
+            ValidationError, match="Arg value should be a valid datetime string"
         ):
             # This will fail in strptime due to bad format, then fail in parsedate
             ConstrainedDatetime("not-a-valid-date-at-all-###", fmt="%Y-%m-%d")
@@ -665,7 +668,7 @@ class TestEdgeCases:
             "ctxinject.validation.parsedate", side_effect=ParserError("Parse error")
         ):
             with pytest.raises(
-                ValueError, match="Arg value should be a valid datetime string"
+                ValidationError, match="Arg value should be a valid datetime string"
             ):
                 # Pass an integer as fmt to trigger TypeError in strptime
                 ConstrainedDatetime("2023-01-15", fmt=123)
@@ -800,9 +803,9 @@ class TestImportFallback:
 
                 result = val_fallback.constrained_list([1, 2, 3], min_length=2)
                 assert result == [1, 2, 3]
-                with pytest.raises(ValueError):
+                with pytest.raises(val_fallback.ValidationError):
                     result = val_fallback.constrained_list([1], min_length=2)
-                with pytest.raises(ValueError):
+                with pytest.raises(val_fallback.ValidationError):
                     result = val_fallback.constrained_list([1, 2, 3], max_length=2)
 
                 result = val_fallback.constrained_dict({"a": 1, "b": 2}, max_length=3)

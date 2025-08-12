@@ -74,7 +74,7 @@ from .overrides import Provider, global_provider
 from .sigcheck import func_signature_check
 
 # Validation utilities
-from .validation import arg_proc, get_validator
+from .validation import ValidationError, arg_proc, get_validator
 
 __all__ = [
     # Main injection functions
@@ -92,6 +92,7 @@ __all__ = [
     "global_provider",
     # Utilities
     "get_validator",
+    "ValidationError",
     "arg_proc",
     "func_signature_check",
     # Exceptions

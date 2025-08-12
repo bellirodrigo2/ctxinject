@@ -161,16 +161,6 @@ def model_method_instance() -> MyModelMethod:
     """Provides a MyModelMethod instance for testing."""
     return MyModelMethod(prefix="basic")
 
-
-# Async fixtures and utilities
-@pytest.fixture
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
 # Sample dependency functions for testing
 async def async_db_dependency() -> DB:
     """Async dependency that returns a DB instance."""

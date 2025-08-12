@@ -22,6 +22,12 @@ from typing_extensions import (
 )
 
 
+class ValidationError(ValueError):
+    """Validation error for ctxinject validation functions."""
+
+    pass
+
+
 def ConstrainedStr(
     value: str,
     min_length: Optional[int] = None,
@@ -30,11 +36,11 @@ def ConstrainedStr(
     **_: Any,
 ) -> str:
     if min_length is not None and not (min_length <= len(value)):
-        raise ValueError(f"String length must be minimun {min_length}")
+        raise ValidationError(f"String length must be minimun {min_length}")
     if max_length is not None and not (len(value) <= max_length):
-        raise ValueError(f"String length must be maximun {max_length}")
+        raise ValidationError(f"String length must be maximun {max_length}")
     if pattern and not re.match(pattern, value):
-        raise ValueError(f"String does not match pattern: {pattern}")
+        raise ValidationError(f"String does not match pattern: {pattern}")
     return value
 
 
@@ -50,15 +56,15 @@ def ConstrainedNumber(
     # if not isinstance(value, int) and not isinstance(value, float):  # type: ignore
     # raise ValueError("Value must be an integer or float")
     if gt is not None and not value > gt:
-        raise ValueError(f"Value must be > {gt}")
+        raise ValidationError(f"Value must be > {gt}")
     if ge is not None and not value >= ge:
-        raise ValueError(f"Value must be >= {ge}")
+        raise ValidationError(f"Value must be >= {ge}")
     if lt is not None and not value < lt:
-        raise ValueError(f"Value must be < {lt}")
+        raise ValidationError(f"Value must be < {lt}")
     if le is not None and not value <= le:
-        raise ValueError(f"Value must be <= {le}")
+        raise ValidationError(f"Value must be <= {le}")
     if multiple_of is not None and value % multiple_of != 0:
-        raise ValueError(f"Value must be a multiple of {multiple_of}")
+        raise ValidationError(f"Value must be a multiple of {multiple_of}")
     return value
 
 
@@ -66,7 +72,9 @@ def ConstrainedUUID(value: str, **_: Any) -> UUID:
     try:
         return UUID(value)
     except Exception:
-        raise ValueError(f'Arg value should be a valid UUID string. Found "{value}"')
+        raise ValidationError(
+            f'Arg value should be a valid UUID string. Found "{value}"'
+        )
 
 
 def ConstrainedDatetime(
@@ -90,14 +98,14 @@ def ConstrainedDatetime(
 
         # the lines below can raise Valueerror
         if from_ is not None and dt < from_:  # type: ignore
-            raise ValueError(f"Datetime value must be on or after {from_}")
+            raise ValidationError(f"Datetime value must be on or after {from_}")
         if to_ is not None and dt > to_:  # type: ignore
-            raise ValueError(f"Datetime value must be on or before {to_}")
+            raise ValidationError(f"Datetime value must be on or before {to_}")
 
         return dt
 
-    except (ValueError, TypeError, ParserError) as e:
-        raise ValueError(
+    except (ValidationError, ValueError, TypeError, ParserError) as e:
+        raise ValidationError(
             f'Arg value should be a valid datetime string. Found "{value}" \n {e}'
         )
 
@@ -142,7 +150,7 @@ def constrained_json(
     try:
         return json.loads(value)  # type: ignore
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED
+        raise ValidationError(f"Invalid JSON: {e}")
 
 
 def constrained_bytejson(
@@ -152,7 +160,7 @@ def constrained_bytejson(
     try:
         return orjson.loads(value)  # type: ignore
     except orjson.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {e}")  # ✅ FIXED (consistency)
+        raise ValidationError(f"Invalid JSON: {e}")
 
 
 def base_constrained_list(
@@ -163,12 +171,12 @@ def base_constrained_list(
     max_length = kwargs.get("max_length", None)
     length = len(value)
     if min_length is not None and length < min_length:
-        raise ValueError(
-            f"List has {length} items, but should have at least {min_length}"  # ✅ FIXED
+        raise ValidationError(
+            f"List has {length} items, but should have at least {min_length}"
         )
     if max_length is not None and length > max_length:
-        raise ValueError(
-            f"List has {length} items, but should have at most {max_length}"  # ✅ FIXED
+        raise ValidationError(
+            f"List has {length} items, but should have at most {max_length}"
         )
     return value
 
@@ -248,6 +256,7 @@ try:
         StringConstraints,
         TypeAdapter,
     )
+    from pydantic import ValidationError as PydanticValidationError
 
     @lru_cache(maxsize=256)
     def get_string_adapter(
@@ -264,12 +273,15 @@ try:
         return TypeAdapter(AnnotatedStr)
 
     def constrained_str(value: str, **kwargs: Any) -> str:
-        adapter = get_string_adapter(
-            kwargs.get("min_length"),
-            kwargs.get("max_length"),
-            kwargs.get("pattern"),
-        )
-        return adapter.validate_python(value)  # type: ignore
+        try:
+            adapter = get_string_adapter(
+                kwargs.get("min_length"),
+                kwargs.get("max_length"),
+                kwargs.get("pattern"),
+            )
+            return adapter.validate_python(value)  # type: ignore
+        except PydanticValidationError as e:
+            raise ValidationError(str(e))
 
     @lru_cache(maxsize=256)
     def get_number_adapter(
@@ -290,14 +302,17 @@ try:
         return TypeAdapter(AnnotatedNum)
 
     def constrained_num(value: Union[int, float], **kwargs: Any) -> Union[int, float]:
-        adapter = get_number_adapter(
-            kwargs.get("gt"),
-            kwargs.get("ge"),
-            kwargs.get("lt"),
-            kwargs.get("le"),
-            kwargs.get("multiple_of"),
-        )
-        return adapter.validate_python(value)  # type: ignore
+        try:
+            adapter = get_number_adapter(
+                kwargs.get("gt"),
+                kwargs.get("ge"),
+                kwargs.get("lt"),
+                kwargs.get("le"),
+                kwargs.get("multiple_of"),
+            )
+            return adapter.validate_python(value)  # type: ignore
+        except PydanticValidationError as e:
+            raise ValidationError(str(e))
 
     @lru_cache(maxsize=256)
     def get_list_adapter(
@@ -312,11 +327,14 @@ try:
         value: List[Any],
         **kwargs: Any,
     ) -> List[Any]:
-        adapter = get_list_adapter(
-            kwargs.get("min_length"),
-            kwargs.get("max_length"),
-        )
-        return adapter.validate_python(value)  # type: ignore
+        try:
+            adapter = get_list_adapter(
+                kwargs.get("min_length"),
+                kwargs.get("max_length"),
+            )
+            return adapter.validate_python(value)  # type: ignore
+        except PydanticValidationError as e:
+            raise ValidationError(str(e))
 
     @lru_cache(maxsize=256)
     def get_dict_adapter(
@@ -331,18 +349,24 @@ try:
         value: Dict[Any, Any],
         **kwargs: Any,
     ) -> Dict[Any, Any]:
-        adapter = get_dict_adapter(
-            kwargs.get("min_length"),
-            kwargs.get("max_length"),
-        )
-        return adapter.validate_python(value)  # type: ignore
+        try:
+            adapter = get_dict_adapter(
+                kwargs.get("min_length"),
+                kwargs.get("max_length"),
+            )
+            return adapter.validate_python(value)  # type: ignore
+        except PydanticValidationError as e:
+            raise ValidationError(str(e))
 
     @lru_cache(maxsize=256)
     def get_str_type_adapter(btype: Type[Any]) -> TypeAdapter[Any]:
         return TypeAdapter(btype)
 
     def constrained_str_type(value: str, btype: Hashable, **kwargs: Any) -> Any:
-        return get_str_type_adapter(btype).validate_python(value)
+        try:
+            return get_str_type_adapter(btype).validate_python(value)
+        except PydanticValidationError as e:
+            raise ValidationError(str(e))
 
     constrained_uuid = partial(constrained_str_type, btype=UUID)
     constrained_email = partial(constrained_str_type, btype=EmailStr)
@@ -372,7 +396,10 @@ try:
         json_str: Union[str, bytes], basetype: Type[BaseModel], **kwargs: Any
     ) -> Any:
         """Parse JSON to Pydantic model."""
-        return basetype.model_validate_json(json_str, **kwargs)
+        try:
+            return basetype.model_validate_json(json_str, **kwargs)
+        except PydanticValidationError as e:
+            raise ValidationError(str(e))
 
     validators.append(get_pydantic_validator)
 
