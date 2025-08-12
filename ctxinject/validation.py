@@ -21,8 +21,6 @@ from typing_extensions import (
     Union,
 )
 
-from ctxinject.model import ModelFieldInject
-
 
 def ConstrainedStr(
     value: str,
@@ -233,7 +231,6 @@ def get_validator(
 
 
 def validator_check(
-    _: ModelFieldInject,
     modeltype: Type[Any],
     basetype: Type[Any],
 ) -> bool:

@@ -1,6 +1,6 @@
 [project]
 name = "ctxinject"
-version = "0.1.7"
+version = "0.1.8"
 description = "Context-based dependency injection for Python"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -46,7 +46,8 @@ dev = [
     "twine",
     "build",
     "pydantic>=2.0.0",  # For full test coverage
-    "pydantic[email]>=2.0.0"
+    "pydantic[email]>=2.0.0",
+    "requests"
 ]
 
 # Enhanced validation with Pydantic (optional for end users)

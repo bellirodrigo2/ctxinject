@@ -1,6 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
-from typing import Set, Tuple
-
+from typing import Dict, Set, Tuple
 from typemapping import (
     VarTypeInfo,
     generic_issubclass,
@@ -37,20 +36,43 @@ def check_all_typed(args: List[VarTypeInfo]) -> List[str]:
     return errors
 
 
+ArgCheck = Callable[
+    [
+        Type[Any],
+        Type[Any],
+    ],
+    bool,
+]
+
+def is_compatible_type(
+    argbasetype: Type[Any],
+    modeltype: Type[Any],
+    arg_predicate: Optional[List[ArgCheck]] = None,
+) -> bool:
+    arg_predicate = arg_predicate or []
+    if generic_issubclass(modeltype, argbasetype):
+        return True
+    return any([check( modeltype, argbasetype)  # type: ignore
+                        for check in arg_predicate])
+
 def check_all_injectables(
     args: List[VarTypeInfo],
     modeltype: Iterable[Type[Any]],
-    bynames: Optional[Iterable[str]] = None,
+    bynames: Optional[Dict[str, Type[Any]]] = None,
+    arg_predicate: Optional[List[ArgCheck]] = None,
 ) -> List[str]:
     """Check that all arguments are injectable using typemapping."""
 
-    bynames = bynames or []
+    bynames = bynames or {}
+    arg_predicate = arg_predicate or []
 
     def is_injectable(arg: VarTypeInfo) -> bool:
         if arg.hasinstance(Injectable):
             return True
         if arg.name in bynames:
-            return True
+            is_subclass= is_compatible_type(arg.basetype,bynames[arg.name],arg_predicate)  # type: ignore
+            if is_subclass:
+                return True
         return any([generic_issubclass(arg.basetype, model) for model in modeltype])  # type: ignore
 
     errors: List[str] = []
@@ -68,16 +90,6 @@ def check_all_injectables(
     args.clear()
     args.extend(valid_args)
     return errors
-
-
-ArgCheck = Callable[
-    [
-        ModelFieldInject,
-        Type[Any],
-        Type[Any],
-    ],
-    bool,
-]
 
 
 def check_modefield_types(
@@ -126,26 +138,17 @@ def check_modefield_types(
                     )
                 )
                 continue
-
-            if generic_issubclass(
-                modeltype, arg.basetype  # type: ignore
-            ):  # ✅ Use typemapping's generic_issubclass
+            if is_compatible_type(
+                arg.basetype, modeltype, arg_predicate):
                 valid_args.append(arg)
                 continue
             else:
-                arg_predicate = arg_predicate or []
-                if not any(
-                    [
-                        check(modelfield_inj, modeltype, arg.basetype)  # type: ignore
-                        for check in arg_predicate
-                    ]
-                ):
-                    errors.append(
-                        error_msg(
-                            arg.name,
-                            f"has ModelFieldInject, but types does not match. Expected {arg.basetype}, but found {modeltype}",
-                        )
+                errors.append(
+                    error_msg(
+                        arg.name,
+                        f"has ModelFieldInject, but types does not match. Expected {arg.basetype}, but found {modeltype}",
                     )
+                )
             valid_args.append(arg)
         else:
             valid_args.append(arg)
@@ -160,7 +163,7 @@ def check_circular_dependencies(
     args: List[VarTypeInfo],
     tgttype: Type[DependsInject] = DependsInject,
     modeltype: Optional[List[Type[Any]]] = None,
-    bynames: Optional[Iterable[str]] = None,
+    bynames: Optional[Dict[str, Type[Any]]] = None,
     bt_default_fallback: bool = True,
     arg_predicate: Optional[List[ArgCheck]] = None,
     _call_stack: Optional[Set[Any]] = None,
@@ -327,10 +330,10 @@ def check_single_injectable(args: List[VarTypeInfo]) -> List[str]:
 def func_signature_check(
     func: Callable[..., Any],
     modeltype: Optional[List[Type[Any]]] = None,
-    bynames: Optional[Iterable[str]] = None,
+    bynames: Optional[Dict[str, Type[Any]]] = None,
     bt_default_fallback: bool = True,
     arg_predicate: Optional[List[ArgCheck]] = None,
-    _call_stack: Optional[set] = None,
+    _call_stack: Optional[Set[Any]] = None,
 ) -> List[str]:
     """
     Check function signature for injection compatibility.
@@ -423,6 +426,7 @@ def func_signature_check(
         )
     except Exception as e:  # pragma: no cover
         return [f"Could not analyze function signature: {e}"]
+    arg_predicate = arg_predicate or []
 
     # Convert to list for in-place modification
     args_list = list(args)
@@ -432,13 +436,12 @@ def func_signature_check(
     typed_errors = check_all_typed(args_list)
     all_errors.extend(typed_errors)
 
-    inj_errors = check_all_injectables(args_list, modeltype, bynames)  # , generictype)
+    inj_errors = check_all_injectables(args_list, modeltype, bynames,arg_predicate)  # , generictype)
     all_errors.extend(inj_errors)
 
     single_errors = check_single_injectable(args_list)
     all_errors.extend(single_errors)
 
-    arg_predicate = arg_predicate or []
     arg_predicate.append(validator_check)
     model_errors = check_modefield_types(args_list, modeltype, arg_predicate)
     all_errors.extend(model_errors)

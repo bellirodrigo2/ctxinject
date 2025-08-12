@@ -1,8 +1,9 @@
+from collections.abc import Iterable
 import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict as Dict_t
+from typing import Dict as Dict_t, Tuple
 from typing import List as List_t
 from uuid import UUID
 
@@ -356,12 +357,29 @@ def test_byname() -> None:
     ) -> int:
         return 42
 
-    errors = check_all_injectables(get_func_args(func), [Model], [])
+    errors = check_all_injectables(get_func_args(func), [Model], {})
     assert len(errors) == 1
 
-    errors = check_all_injectables(get_func_args(func), [Model], ["byname"])
+    errors = check_all_injectables(get_func_args(func), [Model], {"byname":str})
     assert errors == []
 
+
+def test_byname_extended() -> None:
+    def func(
+        byname: str,
+        list_arg:List[str],
+        iter_arg: Iterable[str],
+        time:datetime
+    ) -> int:
+        return 42
+    types_map = {
+        "byname": str,
+        "list_arg": List[str],
+        "iter_arg": Tuple[str],
+        "time":str
+    }
+    errors = check_all_injectables(get_func_args(func), [], types_map,[validator_check])
+    assert errors == []
 
 def test_nested_depends_valid() -> None:
     """Test recursive dependency checking with valid nested dependencies."""

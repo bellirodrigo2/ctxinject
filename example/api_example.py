@@ -324,7 +324,7 @@ def example_signature_validation() -> None:
     ) -> str:
         return f"{name}: {count}"
 
-    errors = func_signature_check(valid_func, bynames=["name"])
+    errors = func_signature_check(valid_func, bynames={"name":str})
     assert errors == [], "Valid function should have no errors"
 
     # Invalid function - missing type annotations

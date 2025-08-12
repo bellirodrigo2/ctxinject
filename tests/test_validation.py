@@ -263,13 +263,13 @@ class TestValidatorCheck:
     def test_has_validate_true(self):
         mock_inj = MagicMock(spec=ModelFieldInject)
         mock_inj.has_validate = True
-        assert validator_check(mock_inj, str, date) is True
+        assert validator_check( str, date) is True
 
     def test_has_validate_false_with_validator(self):
         mock_inj = MagicMock(spec=ModelFieldInject)
         mock_inj.has_validate = False
         # When has_validate is False but a validator exists, returns True
-        assert validator_check(mock_inj, str, date) is True
+        assert validator_check( str, date) is True
 
     def test_both_conditions_false(self):
         # To get False, we need has_validate=True AND no validator exists
@@ -280,7 +280,7 @@ class TestValidatorCheck:
         if result is None:
             # The logic is: if not has_validate or bool(get_validator(...))
             # With has_validate=True and no validator, returns False
-            assert validator_check(mock_inj, list, set) is False
+            assert validator_check( list, set) is False
 
 
 class TestNonPydanticFallbacks:
@@ -694,22 +694,14 @@ class TestIntegration:
         assert isinstance(result, datetime)
 
     def test_model_field_inject_validation(self):
-        # Test validator_check with actual ModelFieldInject
-        model_inject = ModelFieldInject(model=object, field="test")
-
         # Should return True because str->date has a validator
-        assert validator_check(model_inject, str, date) is True
+        assert validator_check( str, date) is True
 
-        # Test with has_validate = True and no validator
-        # We need to create a ModelFieldInject with a validator to make has_validate True
-        model_inject_with_validator = ModelFieldInject(
-            model=object, field="test", validator=lambda x, **kwargs: x
-        )
         # Now has_validate is True, and if no validator exists for list->set, it should return False
-        assert validator_check(model_inject_with_validator, list, set) is False
+        assert validator_check( list, set) is False
 
         # Test with has_validate = True and existing validator
-        assert validator_check(model_inject_with_validator, str, date) is True
+        assert validator_check( str, date) is True
 
 
 class TestImportFallbackSimple:
