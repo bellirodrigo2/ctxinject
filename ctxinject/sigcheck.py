@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator, Generator
 from typing import Dict, Set, Tuple
+
 from typemapping import (
     VarTypeInfo,
     generic_issubclass,
@@ -44,6 +45,7 @@ ArgCheck = Callable[
     bool,
 ]
 
+
 def is_compatible_type(
     argbasetype: Type[Any],
     modeltype: Type[Any],
@@ -52,8 +54,10 @@ def is_compatible_type(
     arg_predicate = arg_predicate or []
     if generic_issubclass(modeltype, argbasetype):
         return True
-    return any([check( modeltype, argbasetype)  # type: ignore
-                        for check in arg_predicate])
+    return any(
+        [check(modeltype, argbasetype) for check in arg_predicate]  # type: ignore
+    )
+
 
 def check_all_injectables(
     args: List[VarTypeInfo],
@@ -70,7 +74,7 @@ def check_all_injectables(
         if arg.hasinstance(Injectable):
             return True
         if arg.name in bynames:
-            is_subclass= is_compatible_type(arg.basetype,bynames[arg.name],arg_predicate)  # type: ignore
+            is_subclass = is_compatible_type(arg.basetype, bynames[arg.name], arg_predicate)  # type: ignore
             if is_subclass:
                 return True
         return any([generic_issubclass(arg.basetype, model) for model in modeltype])  # type: ignore
@@ -138,8 +142,7 @@ def check_modefield_types(
                     )
                 )
                 continue
-            if is_compatible_type(
-                arg.basetype, modeltype, arg_predicate):
+            if is_compatible_type(arg.basetype, modeltype, arg_predicate):
                 valid_args.append(arg)
                 continue
             else:
@@ -436,7 +439,9 @@ def func_signature_check(
     typed_errors = check_all_typed(args_list)
     all_errors.extend(typed_errors)
 
-    inj_errors = check_all_injectables(args_list, modeltype, bynames,arg_predicate)  # , generictype)
+    inj_errors = check_all_injectables(
+        args_list, modeltype, bynames, arg_predicate
+    )  # , generictype)
     all_errors.extend(inj_errors)
 
     single_errors = check_single_injectable(args_list)

@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from typing import Iterable
 import sys
 from datetime import datetime
 from enum import Enum
