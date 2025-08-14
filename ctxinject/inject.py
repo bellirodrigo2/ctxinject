@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import AsyncExitStack
 from functools import partial
 from typing import (
@@ -12,13 +11,6 @@ from typing import (
     Type,
     Union,
 )
-
-try:
-    import anyio
-
-    HAS_ANYIO = True
-except ImportError:
-    HAS_ANYIO = False
 
 from typemapping import VarTypeInfo, get_func_args, get_return_type
 
@@ -35,12 +27,8 @@ from ctxinject.resolvers import (
     TypeResolver,
     ValidateResolver,
 )
+from ctxinject.runner import run_async_tasks
 from ctxinject.validation import get_validator
-
-
-async def _store_result(results: Dict[str, Any], key: str, task: Any) -> None:
-    """Helper function to store async task results in shared dictionary."""
-    results[key] = await task
 
 
 class UnresolvedInjectableError(Exception):
@@ -105,54 +93,25 @@ async def resolve_mapped_ctx(
     async_tasks = []
     async_keys = []
 
-    # Single pass: separate sync and async using fast isinstance check
     for key, resolver in mapped_ctx.items():
         try:
             result = resolver(input_ctx, stack)
+            results[key] = result
 
             if resolver.isasync:
                 async_tasks.append(result)
                 async_keys.append(key)
-            else:
-                results[key] = result
 
         except Exception:
             raise
 
-    # Resolve all async tasks concurrently (if any)
     if async_tasks:
-        if HAS_ANYIO and len(async_tasks) > 1:
-            # Use task groups for better structured concurrency and fail-fast behavior
-            try:
-                async with anyio.create_task_group() as tg:
-                    for key, task in zip(async_keys, async_tasks):
-                        tg.start_soon(_store_result, results, key, task)
-            except Exception as exc:
-                # Handle both regular exceptions and ExceptionGroups for Python 3.8 compatibility
-                if hasattr(exc, "exceptions"):
-                    # ExceptionGroup - extract and re-raise the first exception
-                    for sub_exc in exc.exceptions:
-                        raise sub_exc from None
-                else:
-                    # Regular exception - re-raise as is
-                    raise
+        if len(async_tasks) == 1:
+            results[async_keys[0]] = await async_tasks[0]
         else:
-            # Fallback to asyncio.gather for single task or when anyio unavailable
-            try:
-                resolved_values = await asyncio.gather(
-                    *async_tasks, return_exceptions=True
-                )
-
-                # Process async results and handle exceptions
-                for key, resolved_value in zip(async_keys, resolved_values):
-                    if isinstance(resolved_value, Exception):
-                        # Re-raise original exception to preserve error semantics
-                        raise resolved_value
-                    results[key] = resolved_value
-
-            except Exception:
-                # Preserve original exception without wrapping
-                raise
+            await run_async_tasks(
+                async_tasks=async_tasks, async_keys=async_keys, results=results
+            )
 
     return results
 
@@ -196,7 +155,6 @@ def map_ctx(
         # resolve dependencies
         if isinstance(instance, CallableInjectable):
 
-            # Apply override without mutating the original object
             dep_func = overrides.get(instance.default, instance.default)
             dep_args = get_func_args(dep_func)
             dep_ctx_map = map_ctx(
@@ -207,7 +165,9 @@ def map_ctx(
                 overrides=overrides,
                 enable_async_model_field=enable_async_model_field,
             )
-            value = DependsResolver(dep_func, dep_ctx_map, resolve_mapped_ctx)
+            value = DependsResolver(
+                dep_func, dep_ctx_map, resolve_mapped_ctx, instance.order
+            )
             from_type = get_return_type(dep_func)
         # by name
         elif arg.name in context:

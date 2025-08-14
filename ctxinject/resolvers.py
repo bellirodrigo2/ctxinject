@@ -1,70 +1,22 @@
-import functools
 import inspect
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    ContextManager,
-    Dict,
-    Optional,
-    Type,
-    TypeVar,
-    Union,
-)
-
-import anyio
-from typing_extensions import ParamSpec
+from typing import Any, Callable, Dict, Optional, Type, Union
 
 from ctxinject.model import Injectable, is_async_gen_callable, is_gen_callable
-
-T = TypeVar("T")
-P = ParamSpec("P")
-
-
-async def run_in_threadpool(
-    func: Callable[P, T], *args: P.args, **kwargs: P.kwargs
-) -> T:
-    if kwargs:
-        func = functools.partial(func, **kwargs)
-    return await anyio.to_thread.run_sync(func, *args)
-
-
-@asynccontextmanager
-async def contextmanager_in_threadpool(
-    cm: ContextManager[T],
-) -> AsyncGenerator[T, None]:
-    exit_limiter = anyio.CapacityLimiter(1)
-    try:
-        yield await run_in_threadpool(cm.__enter__)
-    except Exception as e:
-        ok = bool(
-            await anyio.to_thread.run_sync(
-                cm.__exit__, type(e), e, None, limiter=exit_limiter
-            )
-        )
-        if not ok:  # pragma: no branch
-            raise e
-    else:
-        await anyio.to_thread.run_sync(
-            cm.__exit__, None, None, None, limiter=exit_limiter
-        )
+from ctxinject.runner import contextmanager_in_threadpool, run_in_threadpool
 
 
 class BaseResolver:
     """Base class for all synchronous resolvers."""
 
-    __slots__ = "isasync"
+    __slots__ = ("isasync", "order")
 
-    def __init__(self, isasync: bool = False) -> None:
-        """Initialize the base resolver."""
+    def __init__(self, order: int, isasync: bool = False) -> None:
         self.isasync = isasync
+        self.order = order
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any], *args: Any) -> Any:
-        """Execute the resolver function."""
-        raise NotImplementedError(
-            "Subclasses must implement __call__"
-        )  # pragma: no cover
+        raise NotImplementedError()  # pragma: no cover
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(...)"  # pragma: no cover
@@ -75,13 +27,16 @@ class FuncResolver(BaseResolver):
 
     __slots__ = "_func"
 
-    def __init__(self, func: Callable[[Dict[Any, Any]], Any], isasync: bool) -> None:
-        """Initialize function resolver."""
+    def __init__(
+        self, func: Callable[[Dict[Any, Any]], Any], isasync: bool, order: int = 0
+    ) -> None:
         self._func = func
-        super().__init__(isasync)
+        super().__init__(
+            order,
+            isasync,
+        )
 
     def __call__(self, context: Dict[Union[str, Type[Any]], Any], *args: Any) -> Any:
-        """Execute the wrapped function with context."""
         return self._func(context, *args)
 
 
@@ -98,18 +53,14 @@ class ValidateResolver(FuncResolver):
         self._instance = instance
         self._bt = bt
 
-        if True:
-            call_func = (
-                self._wrap_validate_async if func.isasync else self._wrap_validate_sync
-            )
-        else:
-            call_func = self._func_inner
-        super().__init__(call_func, func.isasync)
+        call_func = (
+            self._wrap_validate_async if func.isasync else self._wrap_validate_sync
+        )
+        super().__init__(call_func, func.isasync, order=func.order)
 
     def _wrap_validate_sync(
         self, context: Dict[Union[str, Type[Any]], Any], *args: Any
     ) -> Any:
-        """Sync validation wrapper - validates immediately."""
         value = self._func_inner(context)
         validated = self._instance.validate(value, self._bt)
         return validated
@@ -117,9 +68,8 @@ class ValidateResolver(FuncResolver):
     async def _wrap_validate_async(
         self, context: Dict[Union[str, Type[Any]], Any], *args: Any
     ) -> Any:
-        """Async validation wrapper - awaits value before validation."""
         value = await self._func_inner(context)
-        validated = self._instance.validate(value, self._bt)  # Validator always sync
+        validated = self._instance.validate(value, self._bt)
         return validated
 
 
@@ -129,14 +79,12 @@ class NameResolver(FuncResolver):
     __slots__ = ("_arg_name",)
 
     def __init__(self, arg_name: str) -> None:
-        """Initialize name-based resolver."""
         self._arg_name = arg_name
         super().__init__(self._resolve_by_name, False)
 
     def _resolve_by_name(
         self, context: Dict[Union[str, Type[Any]], Any], *args: Any
     ) -> Any:
-        """Resolve value by name from context."""
         return context[self._arg_name]
 
 
@@ -146,14 +94,12 @@ class TypeResolver(FuncResolver):
     __slots__ = ("_target_type",)
 
     def __init__(self, target_type: Type[Any]) -> None:
-        """Initialize type-based resolver."""
         self._target_type = target_type
         super().__init__(self._resolve_by_type, False)
 
     def _resolve_by_type(
         self, context: Dict[Union[str, Type[Any]], Any], *args: Any
     ) -> Any:
-        """Resolve value by type from context."""
         return context[self._target_type]
 
 
@@ -163,12 +109,10 @@ class DefaultResolver(FuncResolver):
     __slots__ = ("_default_value",)
 
     def __init__(self, default_value: Any) -> None:
-        """Initialize default value resolver."""
         self._default_value = default_value
         super().__init__(self._return_default, False)
 
     def _return_default(self, _: Dict[Union[str, Type[Any]], Any]) -> Any:
-        """Return the pre-configured default value."""
         return self._default_value
 
 
@@ -180,7 +124,6 @@ class ModelFieldResolver(FuncResolver):
     def __init__(
         self, model_type: Type[Any], field_name: str, async_model_field: bool
     ) -> None:
-        """Initialize model field resolver."""
         self._model_type = model_type
         self._field_name = field_name
 
@@ -217,7 +160,6 @@ class ModelFieldResolver(FuncResolver):
     def _extract_field(
         self, context: Dict[Union[str, Type[Any]], Any], *args: Any
     ) -> Any:
-        """Extract field or call method from model instance."""
         obj = context[self._model_type]
         fields = self._field_name.split(".")
 
@@ -253,6 +195,7 @@ class DependsResolver(FuncResolver):
         func_inner: Callable[..., Any],
         ctx_map: Dict[Any, Any],
         resolve_mapped_ctx: Callable[..., Any],
+        order: int,
     ) -> None:
         self._func_inner = func_inner
         if is_async_gen_callable(func_inner):
@@ -271,7 +214,7 @@ class DependsResolver(FuncResolver):
         self._ctx_map = ctx_map
         self._resolve_mapped_ctx = resolve_mapped_ctx
         self._cached_cm_func: Optional[Callable[..., Any]] = None
-        super().__init__(self._resolve_dependency, True)
+        super().__init__(func=self._resolve_dependency, isasync=True, order=order)
 
     async def _resolve_dependency(
         self,
@@ -281,7 +224,7 @@ class DependsResolver(FuncResolver):
         sub_kwargs = await self._resolve_mapped_ctx(context, self._ctx_map)
         func = self._run_func
         if not self._run_func_is_async and not self._is_cm:
-            result = await run_in_threadpool(func, **sub_kwargs)
+            result = run_in_threadpool(func, **sub_kwargs)
         else:
             result = func(**sub_kwargs)
         if inspect.iscoroutine(result):

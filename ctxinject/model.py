@@ -9,13 +9,11 @@ class Iinjectable(Protocol):
     """Protocol defining the interface for injectable dependencies."""
 
     @property
-    def default(self) -> Any:
-        """Get the default value for this injectable."""
-        ...  # pragma: no cover
+    def default(self) -> Any: ...  # pragma: no cover
 
-    def validate(self, instance: Any, basetype: Type[Any]) -> Any:
-        """Validate and potentially transform an instance."""
-        ...  # pragma: no cover
+    def validate(
+        self, instance: Any, basetype: Type[Any]
+    ) -> Any: ...  # pragma: no cover
 
 
 class Injectable(Iinjectable):
@@ -43,12 +41,10 @@ class Injectable(Iinjectable):
 
     @property
     def default(self) -> Any:
-        """Get the default value for this injectable."""
         return self._default
 
     @property
     def has_validate(self) -> bool:
-        """Check if this injectable has a validator function."""
         return self._validator is not None
 
     def validate(self, instance: Any, basetype: Type[Any]) -> Any:
@@ -215,7 +211,6 @@ class ModelFieldInject(ArgsInjectable):
 
     @property
     def model(self) -> Type[Any]:
-        """Get the model type for this injection."""
         return self._model
 
     def get_nested_field_type(self, field_path: str) -> Optional[Type[Any]]:
@@ -229,6 +224,7 @@ class CallableInjectable(Injectable):
         self,
         default: Callable[..., Any],
         validator: Optional[Callable[..., Any]] = None,
+        order: int = 1,
         **meta: Any,
     ):
         """
@@ -239,6 +235,7 @@ class CallableInjectable(Injectable):
             validator: Optional validation function
         """
         super().__init__(default=default, validator=validator, **meta)
+        self.order = order
 
 
 class DependsInject(CallableInjectable):
