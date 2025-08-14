@@ -24,6 +24,7 @@ __pycache__/
 .env/
 .venv/
 .venv38/
+.venv*/
 .venvvpv1/
 env/
 venv/

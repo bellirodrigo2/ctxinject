@@ -233,10 +233,11 @@ class CallableInjectable(Injectable):
         Args:
             default: The callable dependency
             validator: Optional validation function
+            order: async execution order (lower runs first), starting at zero, default=1
         """
         super().__init__(default=default, validator=validator, **meta)
-        if order < 1:
-            order = 1
+        if order < 0:
+            order = 0
         self.order = order
 
 

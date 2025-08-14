@@ -1,10 +1,10 @@
 [project]
 name = "ctxinject"
-version = "0.1.8"
+version = "0.1.9"
 description = "Context-based dependency injection for Python"
 readme = "README.md"
 requires-python = ">=3.8"
-keywords = ["dependency", "injection", "context", "async"]
+keywords = ["DI", "context", "async"]
 authors = [
     { name = "rodbell", email = "bellirodrigo2@gmail.com" },
 ]

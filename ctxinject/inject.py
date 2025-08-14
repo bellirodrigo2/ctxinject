@@ -1,3 +1,4 @@
+from collections import defaultdict
 from contextlib import AsyncExitStack
 from functools import partial
 from typing import (
@@ -7,9 +8,7 @@ from typing import (
     Container,
     Dict,
     Iterable,
-    List,
     Optional,
-    Tuple,
     Type,
     Union,
 )
@@ -47,69 +46,26 @@ class UnresolvedInjectableError(Exception):
     ...
 
 
-async def run_async_resolvers(
-    async_tasks: List[Any], async_keys: List[Any], results: Dict[str, Any]
-) -> None:
-    await run_async_tasks(
-        async_tasks=async_tasks, async_keys=async_keys, results=results
-    )
-
-
-async def run_async_resolvers_ordered(
-    async_resolvers: List[Tuple[str, int, Any]], results: Dict[str, Any]
-) -> None:
-    """
-    Execute async resolvers in order-based batches with early termination on exceptions.
-
-    Groups resolvers by order and executes each order batch sequentially.
-    Within each order, resolvers execute concurrently for optimal performance.
-    Stops execution on first exception without processing subsequent orders.
-
-    Args:
-        async_resolvers: List of (key, order, coroutine) tuples
-        results: Dictionary to store resolved values
-    """
-    from collections import defaultdict
-
-    # Group by order
-    order_batches = defaultdict(list)
-    for key, order, coro in async_resolvers:
-        order_batches[order].append((key, coro))
-
-    # Process batches in order
-    for order in sorted(order_batches.keys()):
-        batch = order_batches[order]
-
-        if len(batch) == 1:
-            # Single task optimization
-            key, task = batch[0]
-            results[key] = await task
-        else:
-            # Multiple tasks - run concurrently within order
-            async_tasks = [coro for _, coro in batch]
-            async_keys = [key for key, _ in batch]
-            await run_async_tasks(
-                async_tasks=async_tasks, async_keys=async_keys, results=results
-            )
-
-
 async def resolve_mapped_ctx(
     input_ctx: Dict[Union[str, Type[Any]], Any],
     mapped_ctx: Dict[str, BaseResolver],
     stack: Optional[AsyncExitStack] = None,
 ) -> Dict[Any, Any]:
     """
-    Resolve mapped context with optimal sync/async separation using type checking.
+    Resolve mapped context with sync/async separation (legacy version).
+
+    This is the standard resolution function that maintains backward compatibility.
+    For optimized resolution with pre-computed ordering, use resolve_mapped_ctx_ordered().
 
     This function efficiently resolves a pre-mapped context by:
-    1. Separating sync and async resolvers using fast isinstance() checks
+    1. Separating sync and async resolvers using isinstance() checks
     2. Executing sync resolvers immediately
     3. Batching async resolvers for concurrent execution
     4. Preserving original exceptions without wrapping
 
     Args:
         input_ctx: The original injection context containing values and types
-        mapped_ctx: Pre-mapped resolvers from get_mapped_ctx() or map_ctx()
+        mapped_ctx: Pre-mapped resolvers from get_mapped_ctx()
         stack: Optional AsyncExitStack for context manager support
 
     Returns:
@@ -131,31 +87,42 @@ async def resolve_mapped_ctx(
         ```
 
     Note:
-        Uses isinstance() for fast O(1) type checking to separate sync and async resolvers.
-        All async operations are executed concurrently for optimal performance.
+        Uses isinstance() for O(1) type checking to separate sync and async resolvers.
+        All async operations are executed concurrently without ordering guarantees.
+        For ordered async execution, use resolve_mapped_ctx_ordered() instead.
     """
     if not mapped_ctx:
         return {}
 
     results = {}
-    async_resolvers = []
+    # async_resolvers = []
+    async_keys = []
+    async_tasks = []
 
     for key, resolver in mapped_ctx.items():
         try:
             result = resolver(input_ctx, stack)
             results[key] = result
             if resolver.isasync:
-                async_resolvers.append((key, resolver.order, result))
+                # async_resolvers.append((key, resolver.order, result))
+                async_keys.append(key)
+                async_tasks.append(result)
 
         except Exception:
             raise
 
-    if async_resolvers:
-        if len(async_resolvers) == 1:
-            key, _, task = async_resolvers[0]
+    # if async_resolvers:
+    if async_tasks:
+        # if len(async_resolvers) == 1:
+        if len(async_tasks) == 1:
+            # key, _, task = async_resolvers[0]
+            key, task = async_keys[0], async_tasks[0]
             results[key] = await task
         else:
-            await run_async_resolvers_ordered(async_resolvers, results)
+            await run_async_tasks(
+                async_tasks=async_tasks, async_keys=async_keys, results=results
+            )
+            # await run_async_resolvers_ordered(async_resolvers, results)
 
     return results
 
@@ -185,6 +152,7 @@ def map_ctx(
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
     enable_async_model_field: bool = False,
+    resolve_mapped_ctx_: Optional[Callable[..., Any]] = None,
 ) -> Dict[str, Any]:
     ctx: Dict[str, Any] = {}
     overrides = overrides or {}
@@ -208,9 +176,13 @@ def map_ctx(
                 validate=validate,
                 overrides=overrides,
                 enable_async_model_field=enable_async_model_field,
+                resolve_mapped_ctx_=resolve_mapped_ctx_,
             )
             value = DependsResolver(
-                dep_func, dep_ctx_map, resolve_mapped_ctx, instance.order
+                dep_func,
+                dep_ctx_map,
+                resolve_mapped_ctx_ or resolve_mapped_ctx,
+                instance.order,
             )
             from_type = get_return_type(dep_func)
         # by name
@@ -263,12 +235,14 @@ def get_mapped_ctx(
     validate: bool = True,
     overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
     enable_async_model_field: bool = False,
+    resolve_mapped_ctx: Optional[Callable[..., Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Get mapped context with optimal resolver wrappers for a function.
+    Get mapped context with resolver wrappers for a function (standard version).
 
     This function analyzes a function's signature and creates a mapping of
     parameter names to their corresponding resolvers based on the injection context.
+    For optimized pre-computed ordering, use get_mapped_ctx_ordered().
 
     Args:
         func: The function to analyze and create resolvers for
@@ -276,6 +250,8 @@ def get_mapped_ctx(
         allow_incomplete: Whether to allow missing dependencies (default: True)
         validate: Whether to apply validation if defined (default: True)
         overrides: Optional mapping to override dependency functions
+        enable_async_model_field: Whether to enable async model field injection
+        resolve_mapped_ctx: Optional custom resolver function for recursive dependencies
 
     Returns:
         Dictionary mapping parameter names to their resolvers
@@ -298,7 +274,8 @@ def get_mapped_ctx(
     Note:
         This is typically used internally by inject_args(), but can be useful
         for advanced scenarios where you need to inspect or modify the resolution
-        process before executing it.
+        process before executing it. For maximum performance with pre-computed
+        ordering, consider using the ordered variants.
     """
     funcargs = get_func_args(func)
     return map_ctx(
@@ -308,6 +285,7 @@ def get_mapped_ctx(
         validate=validate,
         overrides=overrides,
         enable_async_model_field=enable_async_model_field,
+        resolve_mapped_ctx_=resolve_mapped_ctx,
     )
 
 
@@ -322,9 +300,10 @@ async def inject_args(
     use_global_provider: bool = False,
     stack: Optional[AsyncExitStack] = None,
     enable_async_model_field: bool = False,
+    ordered: bool = False,
 ) -> Callable[..., Any]:
     """
-    Inject arguments into function with optimal performance using dependency injection.
+    Inject arguments into function with dependency injection and optional ordering optimization.
 
     This is the main entry point for dependency injection. It analyzes a function's
     signature, resolves dependencies from the provided context, and returns a
@@ -345,6 +324,8 @@ async def inject_args(
         use_global_provider: Whether to use the global provider for overrides
         stack: Optional AsyncExitStack for context managers
         enable_async_model_field: Whether to enable async model field injection
+        ordered: If True, uses optimized execution with pre-computed sync/async separation
+                and order-based batching for maximum performance (default: False)
 
     Returns:
         A functools.partial object with resolved dependencies pre-filled.
@@ -370,59 +351,36 @@ async def inject_args(
         result = injected()  # "Hello Alice! (x5)"
         ```
 
-        Dependency injection with validation:
+        Optimized injection with ordering:
         ```python
-        def validate_positive(value: int, **kwargs) -> int:
-            if value <= 0:
-                raise ValueError("Must be positive")
-            return value
-
-        def process(count: int = ArgsInjectable(1, validate_positive)):
-            return count * 2
-
-        context = {"count": 5}
-        injected = await inject_args(process, context)
-        result = injected()  # 10
+        # Use ordered=True for maximum performance
+        injected = await inject_args(greet, context, ordered=True)
+        result = injected()  # Same result, optimized execution
         ```
 
-        Model field injection:
-        ```python
-        class Config:
-            database_url: str = "sqlite:///app.db"
-            debug: bool = True
-
-        def connect(
-            url: str = ModelFieldInject(Config, "database_url"),
-            debug: bool = ModelFieldInject(Config, "debug")
-        ):
-            return f"Connecting to {url} (debug={debug})"
-
-        config = Config()
-        context = {Config: config}
-        injected = await inject_args(connect, context)
-        result = injected()  # "Connecting to sqlite:///app.db (debug=True)"
-        ```
-
-        Async dependency functions:
+        Async dependency functions with ordering:
         ```python
         async def get_user_service() -> UserService:
             return await UserService.create()
 
         def handle_request(
-            service: UserService = DependsInject(get_user_service)
+            service: UserService = DependsInject(get_user_service, order=1)
         ):
             return service.get_current_user()
 
         context = {}  # Dependencies resolved automatically
-        injected = await inject_args(handle_request, context)
+        injected = await inject_args(handle_request, context, ordered=True)
         result = injected()
         ```
 
     Performance Notes:
-        - Uses fast isinstance() checks to separate sync and async resolvers
+        - Standard mode: Uses isinstance() checks to separate sync and async resolvers
+        - Ordered mode (ordered=True): Pre-computes sync/async separation and ordering
+          for maximum runtime performance, eliminates isinstance checks
         - Async dependencies are resolved concurrently for maximum performance
         - Supports chaining multiple injections on the same function
         - Name-based injection takes precedence over type-based injection
+        - Recursive dependencies automatically use the same execution strategy
     """
     # Resolve final overrides from provider or legacy parameter
     from ctxinject.overrides import Provider, resolve_overrides
@@ -446,13 +404,199 @@ async def inject_args(
     if not isinstance(context, dict):
         context = {type(context): context}
     context_list = list(context.keys())
-    mapped_ctx = get_mapped_ctx(
+
+    get_mapped_ctx_ = get_mapped_ctx_ordered if ordered else get_mapped_ctx
+    resolve_mapped_ctx_ = resolve_mapped_ctx_ordered if ordered else resolve_mapped_ctx
+
+    mapped_ctx = get_mapped_ctx_(
         func=func,
         context=context_list,
         allow_incomplete=allow_incomplete,
         validate=validate,
         overrides=resolved_overrides,
         enable_async_model_field=enable_async_model_field,
+        resolve_mapped_ctx=resolve_mapped_ctx_,
     )
-    resolved = await resolve_mapped_ctx(context, mapped_ctx, stack)
+    resolved = await resolve_mapped_ctx_(context, mapped_ctx, stack)
     return partial(func, **resolved)
+
+
+class OrderedMappedCtx:
+    """
+    Pre-computed execution plan with optimized sync/async separation and ordering.
+
+    This class holds a pre-processed version of mapped context that eliminates
+    runtime overhead by separating sync and async resolvers at creation time
+    and pre-sorting async resolvers by their execution order.
+
+    Attributes:
+        sync_resolvers: Dict of sync resolvers that can be executed immediately
+        async_order_batches: Dict of async resolvers grouped by order for batch execution
+        has_async: Boolean flag to quickly check if async resolution is needed
+
+    Performance Benefits:
+        - Eliminates runtime isinstance() checks
+        - Eliminates runtime sorting and grouping operations
+        - Enables direct execution without type inspection
+        - Optimizes async batch execution by pre-computed ordering
+    """
+
+    def __init__(
+        self,
+        sync_resolvers: Dict[str, BaseResolver],
+        async_order_batches: Dict[int, Dict[str, BaseResolver]],
+        has_async: bool = None,
+    ) -> None:
+        self.sync_resolvers = sync_resolvers
+        self.async_order_batches = async_order_batches
+        self.has_async = (
+            has_async if has_async is not None else bool(async_order_batches)
+        )
+
+    @classmethod
+    def from_mapped_ctx(cls, mapped_ctx: Dict[str, BaseResolver]) -> "OrderedMappedCtx":
+        sync_resolvers = {}
+        async_batches = defaultdict(dict)
+
+        for key, resolver in mapped_ctx.items():
+            if resolver.isasync:
+                tgt_dict = async_batches[resolver.order]
+            else:
+                tgt_dict = sync_resolvers
+            tgt_dict[key] = resolver
+
+        sorted_async_batches = dict(sorted(async_batches.items()))
+
+        return cls(
+            sync_resolvers=sync_resolvers,
+            async_order_batches=sorted_async_batches,
+            has_async=bool(async_batches),
+        )
+
+
+def get_mapped_ctx_ordered(
+    func: Callable[..., Any],
+    context: Container[Union[str, Type[Any]]],
+    allow_incomplete: bool = True,
+    validate: bool = True,
+    overrides: Optional[Dict[Callable[..., Any], Callable[..., Any]]] = None,
+    enable_async_model_field: bool = False,
+    resolve_mapped_ctx: Optional[Callable[..., Any]] = None,
+) -> OrderedMappedCtx:
+    """
+    Get mapped context with pre-computed ordering optimization.
+
+    This function creates an OrderedMappedCtx with pre-separated sync and async
+    resolvers, eliminating runtime type checking and sorting for maximum performance.
+
+    Args:
+        func: The function to analyze and create resolvers for
+        context: Injection context containing values, types, and model instances
+        allow_incomplete: Whether to allow missing dependencies (default: True)
+        validate: Whether to apply validation if defined (default: True)
+        overrides: Optional mapping to override dependency functions
+        enable_async_model_field: Whether to enable async model field injection
+        resolve_mapped_ctx: Optional custom resolver function for recursive dependencies
+
+    Returns:
+        OrderedMappedCtx with pre-computed sync/async separation and ordering
+
+    Raises:
+        UnresolvedInjectableError: When allow_incomplete=False and dependencies are missing
+
+    Example:
+        ```python
+        def my_func(name: str, count: int = ArgsInjectable(42)):
+            return f"{name}: {count}"
+
+        context = {"name": "test", int: 100}
+        ordered_ctx = get_mapped_ctx_ordered(my_func, context)
+
+        # Use with resolve_mapped_ctx_ordered for optimized execution
+        resolved = await resolve_mapped_ctx_ordered(context, ordered_ctx)
+        ```
+
+    Note:
+        This is used internally by inject_args(ordered=True) for maximum performance.
+        The returned OrderedMappedCtx pre-computes execution structure to eliminate
+        runtime overhead during resolution.
+    """
+    mapped_ctx = get_mapped_ctx(
+        func=func,
+        context=context,
+        allow_incomplete=allow_incomplete,
+        validate=validate,
+        overrides=overrides,
+        enable_async_model_field=enable_async_model_field,
+        resolve_mapped_ctx=resolve_mapped_ctx_ordered,
+    )
+    return OrderedMappedCtx.from_mapped_ctx(mapped_ctx)
+
+
+async def resolve_mapped_ctx_ordered(
+    input_ctx: Dict[Union[str, Type[Any]], Any],
+    mapped_ctx: OrderedMappedCtx,
+    stack: Optional[AsyncExitStack] = None,
+) -> Dict[Any, Any]:
+    """
+    Resolve OrderedMappedCtx with maximum performance optimization.
+
+    This function resolves dependencies using a pre-computed execution plan that
+    eliminates runtime isinstance checks, sorting, and grouping operations.
+
+    Performance optimizations:
+    - No runtime isinstance() checks (resolvers pre-categorized)
+    - No runtime sorting or grouping (async batches pre-ordered)
+    - Direct execution of sync resolvers without type checking
+    - Order-based batch execution of async resolvers
+
+    Args:
+        input_ctx: The original injection context containing values and types
+        mapped_ctx: Pre-computed OrderedMappedCtx from get_mapped_ctx_ordered()
+        stack: Optional AsyncExitStack for context manager support
+
+    Returns:
+        Dictionary with resolved argument names and their values
+
+    Raises:
+        Any exceptions from resolver execution are preserved and re-raised
+
+    Example:
+        ```python
+        # Get optimized mapped context
+        ordered_ctx = get_mapped_ctx_ordered(my_function, context)
+
+        # Resolve with maximum performance
+        resolved = await resolve_mapped_ctx_ordered(context, ordered_ctx)
+
+        # Use resolved values
+        result = my_function(**resolved)
+        ```
+
+    Note:
+        This is used internally by inject_args(ordered=True). The OrderedMappedCtx
+        must be created by get_mapped_ctx_ordered() to ensure proper pre-computation.
+        For standard resolution, use resolve_mapped_ctx() instead.
+    """
+
+    if not mapped_ctx:
+        return {}
+
+    results = {}
+
+    for key, resolver in mapped_ctx.sync_resolvers.items():
+        try:
+            result = resolver(input_ctx, stack)
+            results[key] = result
+        except Exception:
+            raise
+    for async_mapped_ctx in mapped_ctx.async_order_batches.values():
+
+        keys = async_mapped_ctx.keys()
+        async_tasks = [
+            resolver(input_ctx, stack) for resolver in async_mapped_ctx.values()
+        ]
+        await run_async_tasks(
+            async_tasks=async_tasks, async_keys=list(keys), results=results
+        )
+    return results

@@ -1,5 +1,5 @@
 # 🚀 ctxinject
-A powerful, FastAPI-inspired dependency injection library for Python with async support, strong typing, and flexible injection strategies.
+A flexible dependency injection library for Python that adapts to your function signatures. Write functions however you want - ctxinject figures out the dependencies.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -15,6 +15,8 @@ A powerful, FastAPI-inspired dependency injection library for Python with async 
 - 🔒 **Strongly typed** - Full type safety with automatic validation
 - ⚡ **Async/Sync support** - Works with both synchronous and asynchronous functions
 - 🎯 **Multiple injection strategies** - By type, name, model fields, or dependencies
+- 🔄 **Context managers** - Automatic resource management for dependencies
+- ⚡ **Priority-based async execution** - Control execution order with async batching
 - ✅ **Automatic validation** - Built-in Pydantic integration and custom validators
 - 🧪 **Test-friendly** - Easy dependency overriding for testing
 - 🐍 **Python 3.8+** - Modern Python support
@@ -136,28 +138,34 @@ injected = await inject_args(greet, context)
 result = injected()  # "Hello Alice! (x5)"
 ```
 
-### 2. FastAPI-style Dependencies
+### 2. FastAPI-style Dependencies with Context Managers
 
 ```python
 from ctxinject.model import DependsInject
+from contextlib import asynccontextmanager
 
 def get_database_url() -> str:
     return "postgresql://localhost/mydb"
 
-async def get_user_service() -> UserService:
+@asynccontextmanager
+async def get_user_service():
     service = UserService()
     await service.initialize()
-    return service
+    try:
+        yield service
+    finally:
+        await service.close()
 
 def process_request(
     db_url: str = DependsInject(get_database_url),
-    user_service: UserService = DependsInject(get_user_service)
+    user_service: UserService = DependsInject(get_user_service, order=1)  # Priority order
 ):
     return f"Processing with {db_url}"
 
-# Dependencies resolved automatically
-injected = await inject_args(process_request, {})
-result = injected()
+# Dependencies resolved automatically, resources managed
+async with AsyncExitStack() as stack:
+    injected = await inject_args(process_request, {}, stack=stack)
+    result = injected()
 ```
 
 ### 3. Model Field Injection
@@ -284,8 +292,14 @@ result = injected()  # "Using mock-service"
 
 ### Async Optimization
 - Concurrent resolution of async dependencies
+- Priority-based execution with `order` parameter
 - Fast isinstance() checks for sync/async separation
-- Optimal performance with minimal overhead
+- Optimized mode with pre-computed execution plans
+
+### Context Manager Support
+- Automatic resource management for dependencies
+- Support for both sync and async context managers
+- Proper cleanup even on exceptions
 
 ### Type Safety
 - Full type checking with mypy support
@@ -296,6 +310,12 @@ result = injected()  # "Using mock-service"
 - Built-in Pydantic integration
 - Custom validator functions
 - Constraint validation (min/max, patterns, etc.)
+
+### Performance Optimization
+```python
+# Use ordered=True for maximum performance
+injected = await inject_args(func, context, ordered=True)
+```
 
 ## 🏗️ Architecture
 

@@ -36,7 +36,7 @@ class TestOrderedAsyncResolvers:
         ):
             return f"{val1}, {val2}, {val3}"
         
-        injected = await inject_args(test_func, {})
+        injected = await inject_args(func=test_func, context={},ordered=True)
         result = injected()
         
         # Verify execution order is correct despite different sleep times
@@ -66,7 +66,7 @@ class TestOrderedAsyncResolvers:
         ):
             return f"{slow}, {fast}"
         
-        injected = await inject_args(test_func, {})
+        injected = await inject_args(func=test_func, context={},ordered=True)
         result = injected()
         
         # Verify order 2 doesn't start until order 1 is completely done
@@ -97,7 +97,7 @@ class TestOrderedAsyncResolvers:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             with pytest.raises(ValueError, match="Order 1 failed"):
-                injected = await inject_args(test_func, {})
+                injected = await inject_args(func=test_func, context={},ordered=True)
                 injected()
         
         # Verify order 2 never started
@@ -128,7 +128,7 @@ class TestOrderedAsyncResolvers:
         ):
             return f"{val_a}, {val_b}"
         
-        injected = await inject_args(test_func, {})
+        injected = await inject_args(func=test_func, context={},ordered=True)
         result = injected()
         
         # Verify tasks started concurrently (within a reasonable time window)
@@ -169,7 +169,7 @@ class TestOrderedAsyncResolvers:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             with pytest.raises(RuntimeError, match="Task failed"):
-                injected = await inject_args(test_func, {})
+                injected = await inject_args(func=test_func, context={},ordered=True)
                 injected()
         
         # Both order 1 tasks should have started, but order 2 should not
@@ -214,7 +214,7 @@ class TestOrderedAsyncResolvers:
         ):
             return f"{base} -> {svc_a}, {svc_b} -> {app}"
         
-        injected = await inject_args(test_func, {})
+        injected = await inject_args(func=test_func, context={},ordered=True)
         result = injected()
         
         # Verify proper ordering: foundation first, then services, then application

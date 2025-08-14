@@ -51,16 +51,26 @@ try:
 except (ImportError, AttributeError):
     import asyncio
     import sys
+    from concurrent.futures import ThreadPoolExecutor
 
     if sys.version_info >= (3, 9):
         to_thread = asyncio.to_thread
     else:
+        # Cached thread pool executor for Python <3.9 performance optimization
+        _thread_executor: Optional[ThreadPoolExecutor] = None
 
         async def to_thread(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+            global _thread_executor
+            if _thread_executor is None:
+                _thread_executor = ThreadPoolExecutor(
+                    max_workers=None,  # Uses default: min(32, (os.cpu_count() or 1) + 4)
+                    thread_name_prefix="ctxinject_",
+                )
+
             loop = asyncio.get_running_loop()
             if kwargs:
                 func = functools.partial(func, **kwargs)
-            return await loop.run_in_executor(None, func, *args)
+            return await loop.run_in_executor(_thread_executor, func, *args)
 
     _exit_semaphore = asyncio.Semaphore(1)
 
