@@ -235,6 +235,8 @@ class CallableInjectable(Injectable):
             validator: Optional validation function
         """
         super().__init__(default=default, validator=validator, **meta)
+        if order < 1:
+            order = 1
         self.order = order
 
 

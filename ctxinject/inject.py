@@ -7,7 +7,9 @@ from typing import (
     Container,
     Dict,
     Iterable,
+    List,
     Optional,
+    Tuple,
     Type,
     Union,
 )
@@ -43,6 +45,52 @@ class UnresolvedInjectableError(Exception):
     """
 
     ...
+
+
+async def run_async_resolvers(
+    async_tasks: List[Any], async_keys: List[Any], results: Dict[str, Any]
+) -> None:
+    await run_async_tasks(
+        async_tasks=async_tasks, async_keys=async_keys, results=results
+    )
+
+
+async def run_async_resolvers_ordered(
+    async_resolvers: List[Tuple[str, int, Any]], results: Dict[str, Any]
+) -> None:
+    """
+    Execute async resolvers in order-based batches with early termination on exceptions.
+
+    Groups resolvers by order and executes each order batch sequentially.
+    Within each order, resolvers execute concurrently for optimal performance.
+    Stops execution on first exception without processing subsequent orders.
+
+    Args:
+        async_resolvers: List of (key, order, coroutine) tuples
+        results: Dictionary to store resolved values
+    """
+    from collections import defaultdict
+
+    # Group by order
+    order_batches = defaultdict(list)
+    for key, order, coro in async_resolvers:
+        order_batches[order].append((key, coro))
+
+    # Process batches in order
+    for order in sorted(order_batches.keys()):
+        batch = order_batches[order]
+
+        if len(batch) == 1:
+            # Single task optimization
+            key, task = batch[0]
+            results[key] = await task
+        else:
+            # Multiple tasks - run concurrently within order
+            async_tasks = [coro for _, coro in batch]
+            async_keys = [key for key, _ in batch]
+            await run_async_tasks(
+                async_tasks=async_tasks, async_keys=async_keys, results=results
+            )
 
 
 async def resolve_mapped_ctx(
@@ -90,28 +138,24 @@ async def resolve_mapped_ctx(
         return {}
 
     results = {}
-    async_tasks = []
-    async_keys = []
+    async_resolvers = []
 
     for key, resolver in mapped_ctx.items():
         try:
             result = resolver(input_ctx, stack)
             results[key] = result
-
             if resolver.isasync:
-                async_tasks.append(result)
-                async_keys.append(key)
+                async_resolvers.append((key, resolver.order, result))
 
         except Exception:
             raise
 
-    if async_tasks:
-        if len(async_tasks) == 1:
-            results[async_keys[0]] = await async_tasks[0]
+    if async_resolvers:
+        if len(async_resolvers) == 1:
+            key, _, task = async_resolvers[0]
+            results[key] = await task
         else:
-            await run_async_tasks(
-                async_tasks=async_tasks, async_keys=async_keys, results=results
-            )
+            await run_async_resolvers_ordered(async_resolvers, results)
 
     return results
 
