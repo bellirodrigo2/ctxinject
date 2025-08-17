@@ -217,6 +217,18 @@ class ModelFieldInject(ArgsInjectable):
         return get_nested_field_type(self.model, field_path)
 
 
+class Validation(Injectable):
+
+    def __init__(self, validator: Callable[..., Any], **meta: Any):
+        super().__init__(..., validator, **meta)
+
+
+class CastType(Injectable):
+    def __init__(self, from_type: Type[Any], **meta: Any):
+        self.from_type = from_type
+        super().__init__(..., **meta)
+
+
 class CallableInjectable(Injectable):
     """Injectable for callable dependencies (functions, lambdas, etc.)."""
 

@@ -128,7 +128,7 @@ class ModelFieldResolver(FuncResolver):
         self._field_name = field_name
         if async_model_field:
             func = self._extract_field_async
-        elif '.' not in field_name:
+        elif "." not in field_name:
             func = self._extract_field_single
         else:
             func = self._extract_field
@@ -159,7 +159,9 @@ class ModelFieldResolver(FuncResolver):
                 obj = attr
         return obj
 
-    def _extract_field_single(self, context: Dict[Union[str, Type[Any]], Any], *args: Any) -> Any:
+    def _extract_field_single(
+        self, context: Dict[Union[str, Type[Any]], Any], *args: Any
+    ) -> Any:
         attr = getattr(context[self._model_type], self._field_name)
         return attr() if callable(attr) else attr
 

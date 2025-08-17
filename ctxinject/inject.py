@@ -18,7 +18,7 @@ from typemapping import VarTypeInfo, get_func_args, get_return_type
 if TYPE_CHECKING:
     from ctxinject.overrides import Provider
 
-from ctxinject.model import CallableInjectable, Injectable, ModelFieldInject
+from ctxinject.model import CallableInjectable, CastType, Injectable, ModelFieldInject
 from ctxinject.resolvers import (
     BaseResolver,
     DefaultResolver,
@@ -190,26 +190,26 @@ def map_ctx(
             value = NameResolver(
                 arg_name=arg.name,
             )
+            if isinstance(instance, CastType):
+                from_type = instance.from_type
         # by model field/method
-        elif instance is not None:
-            if isinstance(instance, ModelFieldInject):
-                tgtmodel = instance.model
-                tgt_field = instance.field or arg.name
-                modeltype = instance.get_nested_field_type(tgt_field)
-                if tgtmodel in context and (modeltype or enable_async_model_field):
-
-                    from_type = modeltype
-                    value = ModelFieldResolver(
-                        model_type=tgtmodel,
-                        field_name=tgt_field,
-                        async_model_field=enable_async_model_field,
-                    )
+        elif isinstance(instance, ModelFieldInject):
+            tgtmodel = instance.model
+            tgt_field = instance.field or arg.name
+            modeltype = instance.get_nested_field_type(tgt_field)
+            if tgtmodel in context and (modeltype or enable_async_model_field):
+                from_type = modeltype
+                value = ModelFieldResolver(
+                    model_type=tgtmodel,
+                    field_name=tgt_field,
+                    async_model_field=enable_async_model_field,
+                )
         # by type
-        if value is None and bt is not None and bt in context:
+        elif value is None and bt is not None and bt in context:
             from_type = bt
             value = TypeResolver(target_type=bt)
         # by default
-        if value is None and default_ is not None and default_ is not Ellipsis:
+        elif value is None and default_ is not None and default_ is not Ellipsis:
             from_type = type(default_)
             value = DefaultResolver(
                 default_value=default_,
