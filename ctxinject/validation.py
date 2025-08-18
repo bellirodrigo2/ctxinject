@@ -389,7 +389,14 @@ try:
     ) -> Optional[Callable[..., Any]]:
 
         if defensive_issubclass(argtype, BaseModel) and modeltype in (str, bytes):
-            return parse_json_model
+
+            def parse_model(json_str: Union[str, bytes]):
+                return parse_json_model(
+                    json_str,
+                    argtype,
+                )
+
+            return parse_model
         return None
 
     def parse_json_model(

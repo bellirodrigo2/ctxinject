@@ -58,7 +58,7 @@ class Injectable(Iinjectable):
         Returns:
             The validated (and possibly transformed) value
         """
-        self.meta["basetype"] = basetype
+        # self.meta["basetype"] = basetype
         if self.has_validate:  # pragma: no cover
             return self._validator(instance, **self.meta)  # type: ignore
         return instance

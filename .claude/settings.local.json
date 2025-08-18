@@ -8,7 +8,9 @@
       "Bash(make lint:*)",
       "Bash(pip install:*)",
       "Bash(git checkout:*)",
-      "Bash(mypy:*)"
+      "Bash(mypy:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }
