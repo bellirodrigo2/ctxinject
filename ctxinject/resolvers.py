@@ -229,7 +229,7 @@ class DependsResolver(FuncResolver):
         context: Dict[Union[str, Type[Any]], Any],
         stack: Optional[AsyncExitStack] = None,
     ) -> Any:
-        sub_kwargs = await self._resolve_mapped_ctx(context, self._ctx_map)
+        sub_kwargs = await self._resolve_mapped_ctx(context, self._ctx_map, stack)
         func = self._run_func
         if not self._run_func_is_async and not self._is_cm:
             result = run_in_threadpool(func, **sub_kwargs)
