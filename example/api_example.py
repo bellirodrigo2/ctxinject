@@ -279,7 +279,7 @@ async def example_advanced_resolution() -> None:
     context: Dict[Any, Any] = {"customer_id": "CUST999", "quantity": 10, float: 49.99}
 
     mapped = get_mapped_ctx(process_order, context, allow_incomplete=True)
-    print(f"Mapped resolvers: {list(mapped.keys())}")
+    print(f"Mapped resolvers: {list(mapped)}")
 
     # Resolve manually
     resolved = await resolve_mapped_ctx(context, mapped)
@@ -324,7 +324,7 @@ def example_signature_validation() -> None:
     ) -> str:
         return f"{name}: {count}"
 
-    errors = func_signature_check(valid_func, bynames={"name":str})
+    errors = func_signature_check(valid_func, bynames={"name": str})
     assert errors == [], "Valid function should have no errors"
 
     # Invalid function - missing type annotations
@@ -349,9 +349,7 @@ def example_signature_validation() -> None:
     def no_return_type():  # No return type annotation
         return "test"
 
-    def bad_deps_func(
-        value: Annotated[str, DependsInject(no_return_type)]
-    ) -> str:
+    def bad_deps_func(value: Annotated[str, DependsInject(no_return_type)]) -> str:
         return value
 
     errors = func_signature_check(bad_deps_func)
