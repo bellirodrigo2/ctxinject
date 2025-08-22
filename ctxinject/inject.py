@@ -1,4 +1,3 @@
-from collections import defaultdict
 from contextlib import AsyncExitStack
 from functools import partial
 from typing import (
@@ -88,7 +87,12 @@ def map_ctx(
 
             dep_func = overrides.get(instance.default, instance.default)
             dep_ctx_map = get_mapped_ctx(
-                dep_func, context, allow_incomplete, validate, overrides, ordered
+                func=dep_func,
+                context=context,
+                allow_incomplete=allow_incomplete,
+                validate=validate,
+                overrides=overrides,
+                ordered=ordered,
             )
             value = DependsResolver(
                 dep_func,
@@ -196,18 +200,18 @@ def get_mapped_ctx(
         validate=validate,
         overrides=overrides,
         enable_async_model_field=enable_async_model_field,
+        ordered=ordered,
     )
     return sort_mapped_ctx(mapped_ctx) if ordered else [mapped_ctx]
 
 
 def sort_mapped_ctx(
-    mapped_ctx: Dict[str, BaseResolver],
-) -> Iterable[Dict[str, BaseResolver]]:
-    resolvers_batches: Dict[int, Dict[str, BaseResolver]] = defaultdict(dict)
+    mapped_ctx: Dict[str, "BaseResolver"],
+) -> Iterable[Dict[str, "BaseResolver"]]:
+    batches: Dict[int, Dict[str, "BaseResolver"]] = {}
     for key, resolver in mapped_ctx.items():
-        resolvers_batches[resolver.order][key] = resolver
-    sorted_async_batches = dict(sorted(resolvers_batches.items()))
-    return list(sorted_async_batches.values())
+        batches.setdefault(resolver.order, {})[key] = resolver
+    return [batch for _, batch in sorted(batches.items())]
 
 
 async def inject_args(
