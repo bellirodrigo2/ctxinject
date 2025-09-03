@@ -33,6 +33,7 @@ def ConstrainedStr(
     min_length: Optional[int] = None,
     max_length: Optional[int] = None,
     pattern: Optional[str] = None,
+    non_empty: Optional[bool] = None,
     **_: Any,
 ) -> str:
     if min_length is not None and not (min_length <= len(value)):
@@ -41,6 +42,8 @@ def ConstrainedStr(
         raise ValidationError(f"String length must be maximun {max_length}")
     if pattern and not re.match(pattern, value):
         raise ValidationError(f"String does not match pattern: {pattern}")
+    if non_empty and not value:
+        raise ValidationError("String must not be empty")
     return value
 
 
@@ -169,7 +172,12 @@ def base_constrained_list(
 ) -> List[Any]:
     min_length = kwargs.get("min_length", None)
     max_length = kwargs.get("max_length", None)
+    non_empty = kwargs.get("non_empty", False)
     length = len(value)
+
+    if non_empty and length == 0:
+        raise ValidationError("List must not be empty")
+
     if min_length is not None and length < min_length:
         raise ValidationError(
             f"List has {length} items, but should have at least {min_length}"
@@ -274,6 +282,10 @@ try:
 
     def constrained_str(value: str, **kwargs: Any) -> str:
         try:
+            non_empty = kwargs.get("non_empty", False)
+            if non_empty and not value:
+                raise ValidationError("String must not be empty")
+
             adapter = get_string_adapter(
                 kwargs.get("min_length"),
                 kwargs.get("max_length"),
@@ -328,6 +340,10 @@ try:
         **kwargs: Any,
     ) -> List[Any]:
         try:
+            non_empty = kwargs.get("non_empty", False)
+            if non_empty and len(value) == 0:
+                raise ValidationError("List must not be empty")
+
             adapter = get_list_adapter(
                 kwargs.get("min_length"),
                 kwargs.get("max_length"),
@@ -350,6 +366,10 @@ try:
         **kwargs: Any,
     ) -> Dict[Any, Any]:
         try:
+            non_empty = kwargs.get("non_empty", False)
+            if non_empty and len(value) == 0:
+                raise ValidationError("Dict must not be empty")
+
             adapter = get_dict_adapter(
                 kwargs.get("min_length"),
                 kwargs.get("max_length"),

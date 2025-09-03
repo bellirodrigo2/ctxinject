@@ -1,8 +1,8 @@
-
 from datetime import datetime
-from typing import Any
+from typing import Any, Tuple
 
 import pytest
+
 from ctxinject.inject import inject_args
 from ctxinject.model import CastType, Validation
 
@@ -33,8 +33,8 @@ def length_validator(text: str, min_length: int = 3, **kwargs: Any) -> str:
 
 def func_basic(
     name: str = Validation(validator=name_validator),
-    time: datetime = CastType(from_type=str)
-) -> tuple:
+    time: datetime = CastType(from_type=str),
+) -> Tuple[Any, ...]:
     return name, type(time)
 
 
@@ -42,15 +42,14 @@ def func_multiple_validations(
     name: str = Validation(validator=name_validator),
     email: str = Validation(validator=email_validator),
     age: int = Validation(validator=positive_int_validator),
-    bio: str = Validation(validator=length_validator, min_length=5)
-) -> tuple:
+    bio: str = Validation(validator=length_validator, min_length=5),
+) -> Tuple[Any, ...]:
     return name, email, age, bio
 
 
 def func_only_cast(
-    count: int = CastType(from_type=str),
-    price: float = CastType(from_type=str)
-) -> tuple:
+    count: int = CastType(from_type=str), price: float = CastType(from_type=str)
+) -> Tuple[Any, ...]:
     return count, price, type(count), type(price)
 
 
@@ -64,32 +63,27 @@ def float_cast_validator(value: str, **kwargs: Any) -> float:
 
 def func_only_cast_with_validators(
     count: int = Validation(validator=int_cast_validator),
-    price: float = Validation(validator=float_cast_validator)
-) -> tuple:
+    price: float = Validation(validator=float_cast_validator),
+) -> Tuple[Any, ...]:
     return count, price, type(count), type(price)
 
 
-def func_only_validation(
-    username: str = Validation(validator=name_validator)
-) -> str:
+def func_only_validation(username: str = Validation(validator=name_validator)) -> str:
     return username
 
 
 def func_mixed_dependencies(
     regular_param: str,
     name: str = Validation(validator=name_validator),
-    timestamp: datetime = CastType(from_type=str)
-) -> tuple:
+    timestamp: datetime = CastType(from_type=str),
+) -> Tuple[Any, ...]:
     return name, timestamp, regular_param
 
 
 # Success test cases
 @pytest.mark.asyncio
 async def test_validation_and_cast_success():
-    ctx = {
-        "name": "John",
-        "time": "2023-10-01T12:00:00"
-    }
+    ctx = {"name": "John", "time": "2023-10-01T12:00:00"}
     injected = await inject_args(func_basic, ctx)
     name, type_time = injected()
     assert name == "John"
@@ -102,7 +96,7 @@ async def test_multiple_validations_success():
         "name": "Alice",
         "email": "ALICE@EXAMPLE.COM",
         "age": 25,
-        "bio": "Software developer"
+        "bio": "Software developer",
     }
     injected = await inject_args(func_multiple_validations, ctx)
     name, email, age, bio = injected()
@@ -114,10 +108,7 @@ async def test_multiple_validations_success():
 
 @pytest.mark.asyncio
 async def test_only_cast_success():
-    ctx = {
-        "count": "42",
-        "price": "19.99"
-    }
+    ctx = {"count": "42", "price": "19.99"}
     injected = await inject_args(func_only_cast_with_validators, ctx)
     count, price, count_type, price_type = injected()
     # The validator should convert from str to int/float
@@ -130,10 +121,7 @@ async def test_only_cast_success():
 @pytest.mark.asyncio
 async def test_cast_type_basic():
     # Test that CastType at least doesn't break, even if no auto-casting
-    ctx = {
-        "count": "42",
-        "price": "19.99"
-    }
+    ctx = {"count": "42", "price": "19.99"}
     injected = await inject_args(func_only_cast, ctx)
     count, price, count_type, price_type = injected()
     # Without explicit validators, values remain as strings
@@ -156,7 +144,7 @@ async def test_mixed_dependencies_success():
     ctx = {
         "name": "Bob",
         "timestamp": "2023-12-25T10:30:00",
-        "regular_param": "test_value"
+        "regular_param": "test_value",
     }
     injected = await inject_args(func_mixed_dependencies, ctx)
     name, timestamp, regular_param = injected()
@@ -168,12 +156,11 @@ async def test_mixed_dependencies_success():
 # Validation failure test cases
 @pytest.mark.asyncio
 async def test_validation_failure_invalid_name():
-    ctx = {
-        "name": "John123",  # Contains numbers
-        "time": "2023-10-01T12:00:00"
-    }
-    
-    with pytest.raises(ValueError, match="Name must contain only alphabetic characters"):
+    ctx = {"name": "John123", "time": "2023-10-01T12:00:00"}  # Contains numbers
+
+    with pytest.raises(
+        ValueError, match="Name must contain only alphabetic characters"
+    ):
         await inject_args(func_basic, ctx)
 
 
@@ -183,9 +170,9 @@ async def test_validation_failure_negative_age():
         "name": "Alice",
         "email": "alice@example.com",
         "age": -5,  # Negative age
-        "bio": "Developer"
+        "bio": "Developer",
     }
-    
+
     with pytest.raises(ValueError, match="Value must be positive"):
         await inject_args(func_multiple_validations, ctx)
 
@@ -196,9 +183,9 @@ async def test_validation_failure_invalid_email():
         "name": "Alice",
         "email": "invalid_email",  # No @ symbol
         "age": 25,
-        "bio": "Developer"
+        "bio": "Developer",
     }
-    
+
     with pytest.raises(ValueError, match="Invalid email format"):
         await inject_args(func_multiple_validations, ctx)
 
@@ -209,9 +196,9 @@ async def test_validation_failure_short_bio():
         "name": "Alice",
         "email": "alice@example.com",
         "age": 25,
-        "bio": "Dev"  # Too short (< 5 chars)
+        "bio": "Dev",  # Too short (< 5 chars)
     }
-    
+
     with pytest.raises(ValueError, match="Text must be at least 5 characters"):
         await inject_args(func_multiple_validations, ctx)
 
@@ -219,33 +206,24 @@ async def test_validation_failure_short_bio():
 # Type casting failure test cases
 @pytest.mark.asyncio
 async def test_cast_failure_invalid_int():
-    ctx = {
-        "count": "not_a_number",
-        "price": "19.99"
-    }
-    
+    ctx = {"count": "not_a_number", "price": "19.99"}
+
     with pytest.raises(ValueError):
         await inject_args(func_only_cast_with_validators, ctx)
 
 
 @pytest.mark.asyncio
 async def test_cast_failure_invalid_float():
-    ctx = {
-        "count": "42",
-        "price": "not_a_float"
-    }
-    
+    ctx = {"count": "42", "price": "not_a_float"}
+
     with pytest.raises(ValueError):
         await inject_args(func_only_cast_with_validators, ctx)
 
 
 @pytest.mark.asyncio
 async def test_cast_failure_invalid_datetime():
-    ctx = {
-        "name": "John",
-        "time": "invalid_datetime_string"
-    }
-    
+    ctx = {"name": "John", "time": "invalid_datetime_string"}
+
     with pytest.raises(Exception):  # Could be ValueError or other validation error
         await inject_args(func_basic, ctx)
 
@@ -254,8 +232,10 @@ async def test_cast_failure_invalid_datetime():
 @pytest.mark.asyncio
 async def test_empty_string_validation():
     ctx = {"username": ""}
-    
-    with pytest.raises(ValueError, match="Name must contain only alphabetic characters"):
+
+    with pytest.raises(
+        ValueError, match="Name must contain only alphabetic characters"
+    ):
         await inject_args(func_only_validation, ctx)
 
 
@@ -265,9 +245,9 @@ async def test_zero_as_positive_validator():
         "name": "Alice",
         "email": "alice@example.com",
         "age": 0,  # Zero should fail positive validation
-        "bio": "Developer"
+        "bio": "Developer",
     }
-    
+
     with pytest.raises(ValueError, match="Value must be positive"):
         await inject_args(func_multiple_validations, ctx)
 
@@ -279,22 +259,21 @@ async def test_special_characters_in_name():
         "name with space",
         "name_with_underscore",
         "name@symbol",
-        "123numbers"
+        "123numbers",
     ]
-    
+
     for invalid_name in test_cases:
         ctx = {"username": invalid_name}
-        
-        with pytest.raises(ValueError, match="Name must contain only alphabetic characters"):
+
+        with pytest.raises(
+            ValueError, match="Name must contain only alphabetic characters"
+        ):
             await inject_args(func_only_validation, ctx)
 
 
 @pytest.mark.asyncio
 async def test_boundary_values_cast():
-    ctx = {
-        "count": "0",
-        "price": "0.0"
-    }
+    ctx = {"count": "0", "price": "0.0"}
     injected = await inject_args(func_only_cast_with_validators, ctx)
     count, price, count_type, price_type = injected()
     assert count == 0
@@ -305,10 +284,7 @@ async def test_boundary_values_cast():
 
 @pytest.mark.asyncio
 async def test_large_numbers_cast():
-    ctx = {
-        "count": "999999",
-        "price": "123456.789"
-    }
+    ctx = {"count": "999999", "price": "123456.789"}
     injected = await inject_args(func_only_cast_with_validators, ctx)
     count, price, count_type, price_type = injected()
     assert count == 999999
@@ -319,10 +295,7 @@ async def test_large_numbers_cast():
 
 @pytest.mark.asyncio
 async def test_whitespace_handling():
-    ctx = {
-        "count": "  42  ",  # With whitespace
-        "price": " 19.99 "
-    }
+    ctx = {"count": "  42  ", "price": " 19.99 "}  # With whitespace
     injected = await inject_args(func_only_cast_with_validators, ctx)
     count, price, count_type, price_type = injected()
     assert count == 42

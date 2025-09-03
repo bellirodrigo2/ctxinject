@@ -62,9 +62,11 @@ from .inject import (
 from .model import (
     ArgsInjectable,
     CallableInjectable,
+    CastType,
     DependsInject,
     Injectable,
     ModelFieldInject,
+    Validation,
 )
 
 # Override management
@@ -87,6 +89,8 @@ __all__ = [
     "CallableInjectable",
     "DependsInject",
     "ModelFieldInject",
+    "Validation",
+    "CastType",
     # Override management
     "Provider",
     "global_provider",

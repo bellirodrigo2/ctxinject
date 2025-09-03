@@ -63,6 +63,13 @@ class TestConstrainedStr:
         with pytest.raises(ValidationError, match="String does not match pattern"):
             ConstrainedStr("hello", pattern=r"^\d+$")
 
+    def test_non_empty_valid(self):
+        assert ConstrainedStr("hello", non_empty=True) == "hello"
+
+    def test_non_empty_invalid(self):
+        with pytest.raises(ValidationError, match="String must not be empty"):
+            ConstrainedStr("", non_empty=True)
+
     def test_all_constraints(self):
         result = ConstrainedStr(
             "hello123", min_length=5, max_length=10, pattern=r"^hello\d+$"
@@ -317,12 +324,28 @@ class TestNonPydanticFallbacks:
         with pytest.raises(ValidationError, match="should have at most 2"):
             base_constrained_list([1, 2, 3], max_length=2)
 
+    def test_base_constrained_list_non_empty_valid(self):
+        result = base_constrained_list([1, 2, 3], non_empty=True)
+        assert result == [1, 2, 3]
+
+    def test_base_constrained_list_non_empty_invalid(self):
+        with pytest.raises(ValidationError, match="List must not be empty"):
+            base_constrained_list([], non_empty=True)
+
     def test_constrained_dict_fallback(self):
         result = base_constrained_dict({"a": 1, "b": 2}, min_length=1, max_length=3)
         assert result == {"a": 1, "b": 2}
 
         with pytest.raises(ValidationError):
             base_constrained_dict({"a": 1}, min_length=3)
+
+    def test_base_constrained_dict_non_empty_valid(self):
+        result = base_constrained_dict({"a": 1, "b": 2}, non_empty=True)
+        assert result == {"a": 1, "b": 2}
+
+    def test_base_constrained_dict_non_empty_invalid(self):
+        with pytest.raises(ValidationError, match="List must not be empty"):
+            base_constrained_dict({}, non_empty=True)
 
     def test_constrained_uuid_fallback(self):
         uuid_str = "550e8400-e29b-41d4-a716-446655440000"
@@ -360,6 +383,13 @@ class TestPydanticIntegration:
 
             with pytest.raises(Exception):
                 constrained_str("world", pattern=r"^h.*")
+
+            # Test non_empty
+            result = constrained_str("hello", non_empty=True)
+            assert result == "hello"
+
+            with pytest.raises(Exception):
+                constrained_str("", non_empty=True)
         except ImportError:
             pytest.skip("Pydantic not installed")
 
@@ -388,6 +418,13 @@ class TestPydanticIntegration:
 
             with pytest.raises(Exception):
                 constrained_list([1, 2, 3, 4, 5, 6], max_length=5)
+
+            # Test non_empty
+            result = constrained_list([1, 2, 3], non_empty=True)
+            assert result == [1, 2, 3]
+
+            with pytest.raises(Exception):
+                constrained_list([], non_empty=True)
         except ImportError:
             pytest.skip("Pydantic not installed")
 
@@ -402,6 +439,13 @@ class TestPydanticIntegration:
 
             with pytest.raises(Exception):
                 constrained_dict({"a": 1, "b": 2, "c": 3, "d": 4}, max_length=3)
+
+            # Test non_empty
+            result = constrained_dict({"a": 1, "b": 2}, non_empty=True)
+            assert result == {"a": 1, "b": 2}
+
+            with pytest.raises(Exception):
+                constrained_dict({}, non_empty=True)
         except ImportError:
             pytest.skip("Pydantic not installed")
 
